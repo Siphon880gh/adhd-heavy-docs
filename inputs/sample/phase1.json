@@ -1,63 +1,174 @@
 {
-  "files": {
-    "braindump.md": {
-      "lines": [
-        { "n": 1, "text": "# linux / server scraps", "marks": [] },
-        { "n": 2, "text": "", "marks": [] },
-        { "n": 3, "text": "wtf does nginx -t actually validate? reload vs restart again", "marks": [] },
-        { "n": 4, "text": "---", "marks": [] },
-        { "n": 5, "text": "ssh keys: copy pub to authorized_keys but ALSO check permissions 700/600 or it silently fails", "marks": [] },
-        { "n": 6, "text": "---", "marks": [] },
-        { "n": 7, "text": "journalctl -u nginx -f   // remember -u not --unit when tired", "marks": [] },
-        { "n": 8, "text": "---", "marks": [] },
+    "kind": "mixed",
+    "title": "Seed diligence + payments design pack",
+    "readingGuides": [
         {
-          "n": 9,
-          "text": "https://youtu.be/dQw4w9WgXcQ",
-          "marks": [],
-          "youtube": {
-            "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
-            "about": "Official music video for Rick Astley’s “Never Gonna Give You Up” (4K remaster). Classic 1987 pop hit often used as an internet rickroll.",
-            "added": true
-          }
+            "id": "rg1",
+            "need": "Legal risk before signing",
+            "howToRead": "Start with the NDA for confidentiality scope and survival, then the term sheet for what is actually binding (exclusivity / confidentiality) versus non-binding economics.",
+            "order": [
+                "nda-excerpt.md",
+                "term-sheet.md"
+            ],
+            "checked": false
         },
-        { "n": 10, "text": "---", "marks": [] },
-        { "n": 11, "text": "ufw: allow 80/443 then enable; don't lock yourself out of 22", "marks": [] },
-        { "n": 12, "text": "---", "marks": [] },
-        { "n": 13, "text": "certbot certonly --nginx -d example.com", "marks": [] },
-        { "n": 14, "text": "renewal is a cron/timer thing — check with systemctl list-timers | grep cert", "marks": [] }
-      ]
-    },
-    "half-thoughts.md": {
-      "lines": [
-        { "n": 1, "text": "rsync -avz --delete ./dist/ user@host:/var/www/app/", "marks": [] },
-        { "n": 2, "text": "DRY RUN FIRST with -n", "marks": [] },
-        { "n": 3, "text": "", "marks": [] },
-        { "n": 4, "text": "tmux: Ctrl-b d detach, Ctrl-b c new window, Ctrl-b % split", "marks": [] },
-        { "n": 5, "text": "", "marks": [] },
-        { "n": 6, "text": "grep -R \"TODO\" --exclude-dir=node_modules .", "marks": [] },
-        { "n": 7, "text": "", "marks": [] },
-        { "n": 8, "text": "article idea?: \"permissions that look fine but break ssh/nginx\" — 700 home, 700 .ssh, 600 keys, SELinux/AppArmor footnote", "marks": [] },
-        { "n": 9, "text": "", "marks": [] },
-        { "n": 10, "text": "pg: dump with pg_dump -Fc, restore pg_restore -d ... don't use plain sql for big dbs", "marks": [] }
-      ]
-    },
-    "random.txt": {
-      "lines": [
-        { "n": 1, "text": "docker ps -a | grep dead", "marks": [] },
-        { "n": 2, "text": "prune? careful volumes", "marks": [] },
-        { "n": 3, "text": "", "marks": [] },
-        { "n": 4, "text": "---", "marks": [] },
-        { "n": 5, "text": "", "marks": [] },
-        { "n": 6, "text": "compose: depends_on does NOT wait for healthy unless condition", "marks": [] },
-        { "n": 7, "text": "", "marks": [] },
-        { "n": 8, "text": "---", "marks": [] },
-        { "n": 9, "text": "", "marks": [] },
-        { "n": 10, "text": "asdf vs nvm vs mise — pick one for node on laptop, stop installing globally with brew every time", "marks": [] },
-        { "n": 11, "text": "", "marks": [] },
-        { "n": 12, "text": "---", "marks": [] },
-        { "n": 13, "text": "", "marks": [] },
-        { "n": 14, "text": "WTF is the difference between EXPOSE and publishing -p again", "marks": [] }
-      ]
+        {
+            "id": "rg2",
+            "need": "Engineer onboarding to the payments API",
+            "howToRead": "Read api-design.md for auth, charge flow, and open questions. Skim the NDA only if you will see customer or partner confidential materials.",
+            "order": [
+                "api-design.md",
+                "nda-excerpt.md"
+            ],
+            "checked": false
+        },
+        {
+            "id": "rg3",
+            "need": "Investor / founder economics skim",
+            "howToRead": "Term sheet first for cap, preference, board, and exclusivity clock. Use the NDA only to confirm info-sharing is covered while diligence runs.",
+            "order": [
+                "term-sheet.md",
+                "nda-excerpt.md"
+            ],
+            "checked": false
+        }
+    ],
+    "moc": [
+        {
+            "id": "moc1",
+            "title": "Money & control",
+            "summary": "Where economics and governance live — and what clocks start on signature.",
+            "links": [
+                {
+                    "file": "term-sheet.md",
+                    "note": "cap, 1x pref, board, exclusivity"
+                },
+                {
+                    "file": "nda-excerpt.md",
+                    "note": "confidentiality survival while diligence runs"
+                }
+            ],
+            "checked": false
+        },
+        {
+            "id": "moc2",
+            "title": "Systems that touch card data",
+            "summary": "PCI boundary and idempotent charge/webhook path for eng review.",
+            "links": [
+                {
+                    "file": "api-design.md",
+                    "note": "Stripe tokenization, HMAC auth, outbox webhooks"
+                }
+            ],
+            "checked": false
+        }
+    ],
+    "documents": {
+        "api-design.md": {
+            "provides": "Internal payments API goals, HMAC auth, charge + webhook flow, open v1 questions.",
+            "coveragePercent": 88,
+            "coverageNote": "Covers auth, happy-path charge, and webhook semantics. Thin on error codes, partial captures decision, and exact backoff schedule.",
+            "keypoints": [
+                {
+                    "id": "api-k1",
+                    "title": "HMAC request auth",
+                    "body": "Server-to-server calls sign timestamp.method.path.body with HMAC-SHA256; 90-day key rotation; 5-minute skew.",
+                    "sources": [
+                        "api-design.md:Auth"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "api-k2",
+                    "title": "Idempotent charges + outbox webhooks",
+                    "body": "POST /v1/charges requires Idempotency-Key; success enqueues charge.succeeded; workers deliver at-least-once; receivers must be idempotent.",
+                    "sources": [
+                        "api-design.md:Charge flow"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "api-k3",
+                    "title": "Open: partial captures & retry budget",
+                    "body": "v1 still undecided on partial captures; webhook retry draft is 8 attempts with exponential backoff.",
+                    "sources": [
+                        "api-design.md:Open questions"
+                    ],
+                    "checked": false
+                }
+            ],
+            "checked": false
+        },
+        "nda-excerpt.md": {
+            "provides": "Mutual NDA purpose, Confidential Information definition, exclusions, term/survival, residuals status.",
+            "coveragePercent": 80,
+            "coverageNote": "Strong on definition, exclusions, and survival. Thin on affiliates, residuals policy choice, and governing law (not in excerpt).",
+            "keypoints": [
+                {
+                    "id": "nda-k1",
+                    "title": "Reasonable-person confidential standard",
+                    "body": "Covers marked confidential info and info that would reasonably be understood as confidential.",
+                    "sources": [
+                        "nda-excerpt.md:§2"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "nda-k2",
+                    "title": "Survival vs trade secrets",
+                    "body": "Agreement term 2 years; confidentiality survives 3 years after termination; trade secrets survive while they remain trade secrets.",
+                    "sources": [
+                        "nda-excerpt.md:§4"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "nda-k3",
+                    "title": "No residuals clause",
+                    "body": "This draft has no residuals clause — unaided memory use is not carved out.",
+                    "sources": [
+                        "nda-excerpt.md:§5"
+                    ],
+                    "checked": false
+                }
+            ],
+            "checked": false
+        },
+        "term-sheet.md": {
+            "provides": "Seed SAFE economics, board/protective provisions, close timing and exclusivity.",
+            "coveragePercent": 84,
+            "coverageNote": "Covers amount/cap, pref, pro-rata, board, protectives, exclusivity. Thin on counsel, conditions precedent, and employee option pool (not stated).",
+            "keypoints": [
+                {
+                    "id": "ts-k1",
+                    "title": "$2.5M on $10M post-money SAFE",
+                    "body": "Lead Northbridge; valuation cap is post-money SAFE structure.",
+                    "sources": [
+                        "term-sheet.md:header"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "ts-k2",
+                    "title": "1x non-participating preference",
+                    "body": "Liquidation preference is 1x non-participating; major investors get pro-rata; MFN on SAFEs for 120 days.",
+                    "sources": [
+                        "term-sheet.md:Economics"
+                    ],
+                    "checked": false
+                },
+                {
+                    "id": "ts-k3",
+                    "title": "Board + 30-day exclusivity",
+                    "body": "Board is 2 founders + 1 lead. Sheet mostly non-binding except confidentiality/exclusivity; exclusivity 30 days; target close 45 days.",
+                    "sources": [
+                        "term-sheet.md:Governance",
+                        "term-sheet.md:Timing"
+                    ],
+                    "checked": false
+                }
+            ],
+            "checked": false
+        }
     }
-  }
 }

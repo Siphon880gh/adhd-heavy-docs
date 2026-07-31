@@ -1,46 +1,34 @@
-# Scattered Notes Harness for ADHD Mind
+# Heavy Docs
 
 By Weng (Weng Fei Fung)
 
-For ADHD minds that jot notes everywhere in real time-and wishes to turn the mess into clear tasks and reference.
+For minds that face large technical documents, legal contracts, and financial pitches—and need a clear way to read them by need, see what each file provides, and hold keypoints or a map of content (MOC) with honest coverage.
 
 ![Last Commit](https://img.shields.io/github/last-commit/Siphon880gh/adhd-scattered-notes-harness/main)
 [![GitHub](https://img.shields.io/badge/GitHub--blue?style=social&logo=GitHub)](https://github.com/Siphon880gh)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=flat&logo=linkedin&labelColor=blue)](https://www.linkedin.com/in/weng-fung/)
 [![Youtube](https://img.shields.io/badge/Youtube-red?style=flat&logo=youtube&labelColor=red)](https://www.youtube.com/@WayneTeachesCode/)
 
-A Cursor / Claude Code harness for turning a folder of ad-hoc notes into grouped tasks and reference knowledge—without losing detail.
+A Cursor / Claude Code harness for turning a folder of heavy documents into navigable reading guides, per-file “what this provides,” keypoints / MOC, and coverage %.
 
-The PHP app is an **artifact container**. The skill does the heavy organizing in Cursor or Claude Code and writes artifacts next to your notes. You open `index.php` to review them, make light Phase 2 adjustments in the browser (move / tag / reorder / Suggest / green-check — saved into `phase2.json` or `phase2-suggestions.md`), then return to the chat for merges, fidelity fixes, or Phase 3 auto-tagging. Phase 3 locks review controls and is mainly **filter + Copy** into your permanent notes app.
-
-## Why this exists for ADHD
-
-If you have ADHD, notes rarely land in one place. You jot something in a `.txt` file, sketch an idea in a `.md` note, save a half-formed thought in another file—and weeks later you have a folder of fragments with no clear through-line.
-
-This harness is for that chaotic, on-the-fly jotting of a fast ADHD brain: dump first, then let AI sort it into something usable—**actionable** tasks or **referable** knowledge.
-
-It does not matter if notes on the same subject are split across different files, if each line is a different idea, or if a whole document is broken up with empty lines. Empty lines or dashes (`---`) as dividers are fine—AI is there to figure out the boundaries and group related thoughts. You can even paste an entire article into a note full of other random thoughts, as long as you made a reasonable effort to mark it as a different idea (separated by empty lines or dashes). If the article already has dash lines, add twice the dash lines to separate the article from your other thoughts (e.g. article uses `---` → wrap it with `------`).
-
-Shorthands and symbols are welcome too. When something is unclear, AI asks you to clarify, then builds a dictionary of your shorthands (`shorthands.md`) so it can read your notes the way you write them.
-
-See also: [README-Tips-How your scattered notes should be.md](README-Tips-How%20your%20scattered%20notes%20should%20be.md)
+The PHP app is an **artifact container**. The skill maps the pack in chat and writes artifacts next to your documents. You open `index.php` to **check the work and respond** on each card (saved for the next AI phase). Phase 2 finalizes in chat; the GUI shows the final pack.
 
 ## Roles
 
 | Piece | Role |
 |-------|------|
-| `.agents/skills/scattered-notes` | Agent skill: pick folder, write artifacts, update config |
+| `.agents/skills/heavy-docs` | Agent skill: list folders, ask which one, write artifacts, update config |
 | `app.config.json` | Points the app at one `inputs/` folder and the active phase |
-| `index.php` | Phase 1 reviewer + Phase 2/3 interactive organizer (saves into `phase2.json`) |
+| `index.php` | Phase 1 review + respond; Phase 2 finalized navigation view |
 
 There is **no folder switcher in the app**. The skill sets `app.config.json`; the app shows whatever that file points at.
 
 ## Setup
 
 1. Create a batch folder: `inputs/whatname/`
-2. Drop scattered notes as `.md` and/or `.txt`. One thought per file, many thoughts in one file, or one thought split across files—all fine. Use `---` between thoughts in the same file when you want a hard break; blank lines and adjacent lines can still be separate thoughts.
-3. In Cursor or Claude Code, run the skill at `.agents/skills/scattered-notes` and pick that folder (the skill will set `app.config.json`) — **or** prompt to use the scattered note organizing skill.
-4. Serve the app and open it to review artifacts:
+2. Drop documents into that folder. Markdown and plain text work; so do **PDF, Word (`.doc`/`.docx`), Excel (`.xls`/`.xlsx`), CSV/TSV**, HTML, RTF, and similar. Excerpts or full files are fine. The skill extracts readable text from each format when mapping the pack.
+3. In Cursor or Claude Code, run the skill at `.agents/skills/heavy-docs` — it **lists folders under `inputs/`** and asks which to use.
+4. Serve the app and open it:
 
 ```bash
 php -S localhost:8765
@@ -51,15 +39,16 @@ Then open `http://localhost:8765`.
 ## Input layout
 
 ```
-shorthands.md          # app-wide glossary (skill-maintained)
 app.config.json
 inputs/
   whatname/
-    note-one.md
-    random-thought.txt
-    phase1.json              # uncertain marks + YouTube descriptors
-    phase2.json              # organized notes + blame map + tags (Phase 2/3)
-    phase2-suggestions.md    # optional: your Suggest notes for the next Phase 2 pass
+    contract.pdf
+    model.xlsx
+    pitch.docx
+    notes.md
+    phase1.json              # reading guides + per-doc coverage/keypoints + MOC
+    phase1-responses.md      # optional: your Respond notes from the GUI
+    phase2.json              # finalized pack after Phase 2 in chat
 ```
 
 `app.config.json`:
@@ -71,119 +60,33 @@ inputs/
 }
 ```
 
-`phase` may be `1`, `2`, or `3`.
+`phase` may be `1` or `2`.
 
-## Three phases
+## Two phases
 
-### Phase 1 — clarify before organize
+### Phase 1 — map, then check in the GUI
 
-The skill reads the app-wide `shorthands.md` (project root) first, then marks unclear symbols and shorthand. YouTube links get a green “added” descriptor (title / what the video is about) inferred from the video’s title, description, and comments—no watching required.
+The skill reads the documents and writes `phase1.json`:
 
-Review marks in `index.php`. Explain shorthand in the agent chat; the skill updates root `shorthands.md` and refreshes `phase1.json`. Reload the app to see updates.
+- **Reading guides** — how to read the pack based on different needs
+- **Per document** — what it provides, coverage %, coverage note, keypoints
+- **MOC** — cross-document hubs when useful
 
-### Phase 2 — organize with fidelity
+**Open the GUI next.** Check each guide / document / keypoint / MOC node. Use **Respond** on anything that should change. Checks save into `phase1.json`; responses save into `phase1-responses.md` for the agent.
 
-When Phase 1 is done, the skill groups notes into **Scattered**, **Reference**, and **Articles** (stored in `phase2.json` as `tasks`, `reference`, and `articleCandidates`). Every source line is accounted for in a blame map so details do not disappear silently.
+Use **Quiz** on a card or source file to open a copyable prompt for Cursor / Claude Code. The quiz runs in that chat thread — not in the PHP app.
 
-Visit the web app and check that things are properly organized. In the app you can:
+### Phase 2 — finalize in AI chat
 
-- **Move** items between Scattered / Reference / Articles (Move dropdown on each card)
-- **Green-check** items as you review them (circle next to the title; saved into `phase2.json`)
-- **Suggest** on any card (and on each section header: Scattered / Reference / Articles) — tell the AI how to change a note or a whole section (rewrite, merge, move, tagging, heading style, ordering); saved to `phase2-suggestions.md` for the next pass
-- **Tag** any item on the right; new tags appear in the **Filter** bar at the top (optional — Phase 3 will tag by area for you)
-- **Collapse / expand** each panel from its header
-- **Rearrange** items inside a panel: click the ↔ icon, drag cards, then release (or click ↔ again) to finish — order is saved
-- Open original notes with per-line accounting via the hamburger (**B** toggles that sidebar open/closed)
-
-Panel moves/tags POST to `index.php?action=save-phase2` (`phase2.json`). Suggest notes POST to `index.php?action=save-suggestions` (`phase2-suggestions.md`). Return to chat for merges, fidelity fixes, or to start Phase 3 — the skill reads your suggestions when revising Phase 2.
-
-### Phase 3 — auto-tag by area (locked)
-
-When Phase 2 looks good, the skill applies any pending `phase2-suggestions.md` notes, re-reads `phase2.json` (including browser edits), and tags items that belong in the same area. It also writes a `filterLayout` that groups related tags and inserts dividers between major areas. Tags can chunk up/down an idea (supercategory / category / subcategory); an item may have more than one tag. Spaces in tags are fine; prefer short phrases over long ones. User-added tags are preserved and merged.
-
-Refresh the app: **Suggest** and green-check are off. Filter by tag and **Copy** cards (or whole panels) into your permanent notes app. Tag/move tweaks still save; return to chat only if you need tag refinements.
+When Phase 1 looks good, return to chat and start Phase 2. The skill reads your GUI responses, writes `phase2.json`, and sets phase 2. Visit the GUI to see the final pack. You can always say **Revert to Phase 1** in chat, then refresh.
 
 ## Skill handoff
 
-Each phase in the app tells you how to return to Cursor or Claude Code to continue. Typical loop:
+1. Skill lists `inputs/` folders and asks which one
+2. Skill writes Phase 1 artifacts and sets `app.config.json`
+3. You review and respond in `index.php`
+4. You go back to chat to finalize Phase 2 (or remap / revert)
 
-1. Skill writes artifacts and sets `app.config.json`
-2. You review in `index.php`
-3. You go back to the chat to explain marks, advance phases, or fix fidelity gaps
+## Sample
 
-## Alternate workflow (slash commands)
-
-Same harness, stepped explicitly in chat:
-
-1. `/scattered-notes Start` — list folders under `inputs/`, pick one (or reset sample / use your own notes)
-2. `/scattered-notes Lets start Phase 1` — mark uncertain shorthand/symbols and enrich YouTube links; review in `index.php`, then return to chat to explain marks or confirm
-3. `/scattered-notes Lets go to Phase 2` — organize into Scattered / Reference / Articles with per-line blame; review and lightly edit in `index.php`, then return to chat to refine or advance
-4. `/scattered-notes Lets go to Phase 3` — apply pending suggestions if any, auto-tag by area; in `index.php` filter + Copy into your notes app (Suggest / check locked)
-
-Between steps, serve and open the app as usual (`php -S localhost:8765` → `http://localhost:8765`).
-
-## Who this is for
-
-Anyone who captures thoughts in bursts and organizes later—or never quite gets to the organizing part. Messy files, personal shorthand, split subjects, and divider chaos are expected. The harness meets you where your notes already are and turns them into something you can act on or look up.
-
-## How it looks / how to use
-
-### 1. Run the skill and pick a folder
-
-In Cursor or Claude Code, ask to use the scattered-notes skill. The agent lists folders under `inputs/` and waits for you to pick one (here: `sample`).
-
-![Run the skill and pick a folder](docs/screenshots/a1.png)
-
-### 2. Phase 1 artifacts land in the batch folder
-
-The skill writes `phase1.json` (uncertain marks, YouTube descriptors) and points you at the PHP app to review—or you can tell it Phase 1 looks good and to continue.
-
-![Phase 1 artifacts in the editor](docs/screenshots/a2.png)
-
-### 3. Review Phase 1 in the app — uncertain marks and YouTube adds
-
-Open `index.php`. Uncertain shorthand is highlighted with a note; YouTube links get a green added descriptor. Explain marks back in chat, or say Phase 1 looks good.
-
-![Phase 1: braindump with marks and YouTube descriptor](docs/screenshots/b.png)
-
-### 4. Flip through files — more shorthand marks
-
-Same Phase 1 view on another note (`half-thoughts.md`): e.g. `pg` flagged for confirmation.
-
-![Phase 1: half-thoughts with pg mark](docs/screenshots/c.png)
-
-### 5. Cross-file marks
-
-Marks can repeat across files (e.g. `WTF` in `random.txt` linked to the same token in `braindump.md`).
-
-![Phase 1: random.txt with WTF mark](docs/screenshots/d.png)
-
-### 6. Advance to Phase 2 in chat
-
-Back in the agent chat, ask to proceed to Phase 2. The skill writes `phase2.json` and sets `app.config.json` to phase 2.
-
-![Proceed to Phase 2 in chat](docs/screenshots/e.png)
-
-### 7. Phase 2 — organized panels you can edit
-
-Reload the app. The main view shows **Scattered**, **Reference**, and **Articles** with source line links. On each card, use the right-side tray to add tags and Move between panels. Use the top Filter chips once tags exist; collapse panels from the header; use ↔ to rearrange within a panel.
-
-![Phase 2: organized tasks](docs/screenshots/f.png)
-
-### 8. Hamburger — original notes with per-line accounting
-
-Use the hamburger (or **B**) to open or close original notes. Each source line shows what it became (`mapped`, `merged`, `reference`, `dropped_noise`, etc.) so nothing disappears silently.
-
-![Phase 2: line accounting panel](docs/screenshots/g.png)
-
-### 9. Phase 2 — suggest at the group level
-
-On a section header (Scattered / Reference / Articles), click **Suggest** and tell the AI how to change every note in that group—for example, heading style, ordering, or tagging. The note is saved to `phase2-suggestions.md` for the next pass.
-
-![Phase 2: giving group-level Suggest instructions](docs/screenshots/suggest-section-2.png)
-
-### 10. Phase 3 — group instructions applied
-
-After you advance, those section-level instructions are applied across the whole group. Here, “Precede each heading with Task:” rewrote every Scattered heading; Phase 3 then locks Suggest and green-check so you can filter and Copy into your notes app.
-
-![Phase 3: group Suggest instructions applied to all notes in the section](docs/screenshots/suggest-section-1.png)
+`inputs/sample/` includes short excerpts: payments API design, mutual NDA, and a seed term sheet — enough to exercise technical, legal, and financial reading paths.

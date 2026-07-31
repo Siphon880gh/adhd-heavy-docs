@@ -35,7 +35,7 @@ function load_config(): array
 
     $folder = isset($data['inputFolder']) ? trim((string) $data['inputFolder']) : '';
     $phase = isset($data['phase']) ? (int) $data['phase'] : 1;
-    if ($phase !== 2 && $phase !== 3) {
+    if ($phase !== 2) {
         $phase = 1;
     }
 
@@ -51,17 +51,56 @@ function input_dir(string $folder): string
 }
 
 /**
+ * Extensions treated as source documents in the batch folder.
+ *
  * @return list<string>
  */
-function list_note_files(string $dir): array
+function source_doc_extensions(): array
+{
+    return [
+        'md', 'txt', 'csv', 'tsv',
+        'pdf',
+        'doc', 'docx',
+        'xls', 'xlsx',
+        'ppt', 'pptx',
+        'rtf', 'html', 'htm',
+        'pages', 'numbers', 'key',
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function text_preview_extensions(): array
+{
+    return ['md', 'txt', 'csv', 'tsv', 'html', 'htm', 'rtf'];
+}
+
+function is_source_doc_file(string $name): bool
+{
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    return $ext !== '' && in_array($ext, source_doc_extensions(), true);
+}
+
+function is_text_previewable(string $name): bool
+{
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    return $ext !== '' && in_array($ext, text_preview_extensions(), true);
+}
+
+/**
+ * @return list<string>
+ */
+function list_doc_files(string $dir): array
 {
     if (!is_dir($dir)) {
         return [];
     }
 
     $skip = [
-        'shorthands.md' => true,
-        'phase2-suggestions.md' => true,
+        'phase1-responses.md' => true,
+        '.ds_store' => true,
+        'thumbs.db' => true,
     ];
     $files = [];
 
@@ -69,11 +108,10 @@ function list_note_files(string $dir): array
         if ($name === '.' || $name === '..') {
             continue;
         }
-        if (isset($skip[$name])) {
+        if (isset($skip[strtolower($name)])) {
             continue;
         }
-        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        if ($ext !== 'md' && $ext !== 'txt') {
+        if (!is_source_doc_file($name)) {
             continue;
         }
         $path = $dir . '/' . $name;
@@ -103,296 +141,6 @@ function load_json_file(string $path): ?array
 }
 
 /**
- * Build a fallback line list from the raw file when phase1.json is missing a file.
- *
- * @return list<array{n: int, text: string, marks: list<array<string, mixed>>}>
- */
-function raw_file_lines(string $path): array
-{
-    if (!is_file($path)) {
-        return [];
-    }
-    $content = file_get_contents($path);
-    if ($content === false) {
-        return [];
-    }
-    $content = str_replace(["\r\n", "\r"], "\n", $content);
-    $parts = explode("\n", $content);
-    // Drop trailing empty line from final newline
-    if ($parts !== [] && end($parts) === '') {
-        array_pop($parts);
-    }
-
-    $lines = [];
-    $n = 1;
-    foreach ($parts as $text) {
-        $lines[] = [
-            'n' => $n,
-            'text' => $text,
-            'marks' => [],
-        ];
-        $n++;
-    }
-    return $lines;
-}
-
-/**
- * @return list<string>
- */
-function phase2_bucket_keys(): array
-{
-    return ['tasks', 'reference', 'articleCandidates'];
-}
-
-/**
- * @param mixed $tags
- * @return list<string>
- */
-function normalize_tags($tags): array
-{
-    if (!is_array($tags)) {
-        return [];
-    }
-    $out = [];
-    $seen = [];
-    foreach ($tags as $tag) {
-        $name = trim((string) $tag);
-        if ($name === '') {
-            continue;
-        }
-        $key = strtolower($name);
-        if (isset($seen[$key])) {
-            continue;
-        }
-        $seen[$key] = true;
-        $out[] = $name;
-    }
-    return $out;
-}
-
-/**
- * @param array<string, mixed> $organized
- * @return list<string>
- */
-function collect_organized_tags(array $organized): array
-{
-    $out = [];
-    $seen = [];
-    foreach (phase2_bucket_keys() as $bucket) {
-        $items = $organized[$bucket] ?? [];
-        if (!is_array($items)) {
-            continue;
-        }
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            foreach (normalize_tags($item['tags'] ?? []) as $tagName) {
-                $key = strtolower($tagName);
-                if (isset($seen[$key])) {
-                    continue;
-                }
-                $seen[$key] = true;
-                $out[] = $tagName;
-            }
-        }
-    }
-    return $out;
-}
-
-/**
- * @param mixed $layout
- * @param list<string> $availableTags
- * @return list<array{type: string, name?: string}>
- */
-function normalize_filter_layout($layout, array $availableTags): array
-{
-    $available = [];
-    foreach ($availableTags as $tagName) {
-        $name = trim((string) $tagName);
-        if ($name === '') {
-            continue;
-        }
-        $available[strtolower($name)] = $name;
-    }
-
-    $out = [];
-    $used = [];
-    if (is_array($layout)) {
-        foreach ($layout as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $type = (string) ($item['type'] ?? '');
-            if ($type === 'divider') {
-                if ($out !== [] && ($out[count($out) - 1]['type'] ?? '') === 'divider') {
-                    continue;
-                }
-                $out[] = ['type' => 'divider'];
-                continue;
-            }
-            if ($type !== 'tag') {
-                continue;
-            }
-            $name = trim((string) ($item['name'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-            $key = strtolower($name);
-            if (!isset($available[$key]) || isset($used[$key])) {
-                continue;
-            }
-            $used[$key] = true;
-            $out[] = ['type' => 'tag', 'name' => $available[$key]];
-        }
-    }
-
-    $missing = [];
-    foreach ($available as $key => $name) {
-        if (!isset($used[$key])) {
-            $missing[] = $name;
-        }
-    }
-    natcasesort($missing);
-    foreach (array_values($missing) as $name) {
-        $out[] = ['type' => 'tag', 'name' => $name];
-    }
-
-    return $out;
-}
-
-/**
- * @param array<string, mixed> $item
- * @return array<string, mixed>
- */
-function normalize_organized_item(array $item, string $bucket): array
-{
-    $id = trim((string) ($item['id'] ?? ''));
-    $title = (string) ($item['title'] ?? ($id !== '' ? $id : 'Untitled'));
-    $sources = $item['sources'] ?? [];
-    if (!is_array($sources)) {
-        $sources = [];
-    }
-    $sourcesOut = [];
-    foreach ($sources as $src) {
-        $sourcesOut[] = (string) $src;
-    }
-
-    $body = (string) ($item['body'] ?? '');
-    $why = (string) ($item['why'] ?? '');
-    $checked = !empty($item['checked']);
-
-    if ($bucket === 'articleCandidates') {
-        if ($why === '' && $body !== '') {
-            $why = $body;
-        }
-        $normalized = [
-            'id' => $id,
-            'title' => $title,
-            'why' => $why,
-            'sources' => $sourcesOut,
-            'tags' => normalize_tags($item['tags'] ?? []),
-            'checked' => $checked,
-        ];
-    } else {
-        if ($body === '' && $why !== '') {
-            $body = $why;
-        }
-        $normalized = [
-            'id' => $id,
-            'title' => $title,
-            'body' => $body,
-            'sources' => $sourcesOut,
-            'tags' => normalize_tags($item['tags'] ?? []),
-            'checked' => $checked,
-        ];
-    }
-
-    return $normalized;
-}
-
-/**
- * @param array<string, mixed>|null $phase1
- * @param list<string> $noteFiles
- * @return array{files: int, uncertain: int, youtube: int}
- */
-function phase1_review_counts(?array $phase1, array $noteFiles): array
-{
-    $uncertain = 0;
-    $youtube = 0;
-    if (is_array($phase1) && isset($phase1['files']) && is_array($phase1['files'])) {
-        foreach ($phase1['files'] as $fileData) {
-            if (!is_array($fileData)) {
-                continue;
-            }
-            $lines = $fileData['lines'] ?? [];
-            if (!is_array($lines)) {
-                continue;
-            }
-            foreach ($lines as $line) {
-                if (!is_array($line)) {
-                    continue;
-                }
-                $marks = $line['marks'] ?? [];
-                if (is_array($marks)) {
-                    foreach ($marks as $mark) {
-                        if (is_array($mark) && ($mark['type'] ?? '') === 'uncertain') {
-                            $uncertain++;
-                            break;
-                        }
-                    }
-                }
-                $yt = $line['youtube'] ?? null;
-                if (is_array($yt) && !empty($yt['added'])) {
-                    $youtube++;
-                }
-            }
-        }
-    }
-
-    return [
-        'files' => count($noteFiles),
-        'uncertain' => $uncertain,
-        'youtube' => $youtube,
-    ];
-}
-
-/**
- * @param array<string, mixed>|null $organized
- * @return array{tasks: list<array<string, mixed>>, reference: list<array<string, mixed>>, articleCandidates: list<array<string, mixed>>}
- */
-function normalize_organized(?array $organized): array
-{
-    $out = [
-        'tasks' => [],
-        'reference' => [],
-        'articleCandidates' => [],
-    ];
-    if (!is_array($organized)) {
-        return $out;
-    }
-
-    foreach (phase2_bucket_keys() as $bucket) {
-        $items = $organized[$bucket] ?? [];
-        if (!is_array($items)) {
-            continue;
-        }
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $normalized = normalize_organized_item($item, $bucket);
-            if ($normalized['id'] === '') {
-                continue;
-            }
-            $out[$bucket][] = $normalized;
-        }
-    }
-
-    return $out;
-}
-
-/**
  * @param array<string, mixed> $data
  */
 function save_json_file(string $path, array $data): bool
@@ -404,59 +152,188 @@ function save_json_file(string $path, array $data): bool
     return file_put_contents($path, $json . "\n") !== false;
 }
 
-function phase2_suggestions_path(string $dir): string
+/**
+ * @param mixed $links
+ * @return list<array{file: string, note: string}>
+ */
+function normalize_moc_links($links): array
 {
-    return $dir . '/phase2-suggestions.md';
+    $out = [];
+    if (!is_array($links)) {
+        return $out;
+    }
+    foreach ($links as $link) {
+        if (!is_array($link)) {
+            continue;
+        }
+        $file = trim((string) ($link['file'] ?? ''));
+        if ($file === '') {
+            continue;
+        }
+        $out[] = [
+            'file' => $file,
+            'note' => trim((string) ($link['note'] ?? '')),
+        ];
+    }
+    return $out;
 }
 
 /**
- * Panel keys that accept whole-section Suggest notes (match phase2 buckets).
- *
+ * @param mixed $sources
  * @return list<string>
  */
-function phase2_suggestion_panel_keys(): array
+function normalize_sources($sources): array
 {
-    return ['tasks', 'reference', 'articleCandidates'];
+    $out = [];
+    if (!is_array($sources)) {
+        return $out;
+    }
+    foreach ($sources as $src) {
+        $text = trim((string) $src);
+        if ($text !== '') {
+            $out[] = $text;
+        }
+    }
+    return $out;
 }
 
 /**
- * @param mixed $data
- * @return array{panel: array{tasks: string, reference: string, articleCandidates: string}, items: array<string, string>}
+ * @param mixed $order
+ * @return list<string>
  */
-function normalize_phase2_suggestions($data): array
+function normalize_order($order): array
 {
-    $panelKeys = phase2_suggestion_panel_keys();
+    $out = [];
+    if (!is_array($order)) {
+        return $out;
+    }
+    foreach ($order as $name) {
+        $text = trim((string) $name);
+        if ($text !== '') {
+            $out[] = $text;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param array<string, mixed> $item
+ * @return array<string, mixed>
+ */
+function normalize_keypoint(array $item): array
+{
+    return [
+        'id' => trim((string) ($item['id'] ?? '')),
+        'title' => (string) ($item['title'] ?? 'Untitled'),
+        'body' => (string) ($item['body'] ?? ''),
+        'sources' => normalize_sources($item['sources'] ?? []),
+        'checked' => !empty($item['checked']),
+    ];
+}
+
+/**
+ * @param array<string, mixed>|null $data
+ * @return array{
+ *   kind: string,
+ *   title: string,
+ *   readingGuides: list<array<string, mixed>>,
+ *   moc: list<array<string, mixed>>,
+ *   documents: array<string, array<string, mixed>>
+ * }
+ */
+function normalize_nav_pack(?array $data): array
+{
     $out = [
-        'panel' => [
-            'tasks' => '',
-            'reference' => '',
-            'articleCandidates' => '',
-        ],
-        'items' => [],
+        'kind' => 'mixed',
+        'title' => '',
+        'readingGuides' => [],
+        'moc' => [],
+        'documents' => [],
     ];
     if (!is_array($data)) {
         return $out;
     }
 
-    $panel = $data['panel'] ?? null;
-    if (is_array($panel)) {
-        foreach ($panelKeys as $key) {
-            $out['panel'][$key] = trim((string) ($panel[$key] ?? ''));
+    $kind = trim((string) ($data['kind'] ?? 'mixed'));
+    $allowed = ['technical' => true, 'legal' => true, 'financial' => true, 'mixed' => true];
+    $out['kind'] = isset($allowed[$kind]) ? $kind : 'mixed';
+    $out['title'] = trim((string) ($data['title'] ?? ''));
+
+    $guides = $data['readingGuides'] ?? [];
+    if (is_array($guides)) {
+        foreach ($guides as $guide) {
+            if (!is_array($guide)) {
+                continue;
+            }
+            $id = trim((string) ($guide['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $out['readingGuides'][] = [
+                'id' => $id,
+                'need' => (string) ($guide['need'] ?? ''),
+                'howToRead' => (string) ($guide['howToRead'] ?? ''),
+                'order' => normalize_order($guide['order'] ?? []),
+                'checked' => !empty($guide['checked']),
+            ];
         }
     }
 
-    $items = $data['items'] ?? null;
-    if (is_array($items)) {
-        foreach ($items as $id => $text) {
-            $itemId = trim((string) $id);
-            if ($itemId === '') {
+    $moc = $data['moc'] ?? [];
+    if (is_array($moc)) {
+        foreach ($moc as $node) {
+            if (!is_array($node)) {
                 continue;
             }
-            $body = trim((string) $text);
-            if ($body === '') {
+            $id = trim((string) ($node['id'] ?? ''));
+            if ($id === '') {
                 continue;
             }
-            $out['items'][$itemId] = $body;
+            $out['moc'][] = [
+                'id' => $id,
+                'title' => (string) ($node['title'] ?? 'Untitled'),
+                'summary' => (string) ($node['summary'] ?? ''),
+                'links' => normalize_moc_links($node['links'] ?? []),
+                'checked' => !empty($node['checked']),
+            ];
+        }
+    }
+
+    $docs = $data['documents'] ?? [];
+    if (is_array($docs)) {
+        foreach ($docs as $filename => $doc) {
+            $name = trim((string) $filename);
+            if ($name === '' || !is_array($doc)) {
+                continue;
+            }
+            $percent = (int) ($doc['coveragePercent'] ?? 0);
+            if ($percent < 0) {
+                $percent = 0;
+            }
+            if ($percent > 100) {
+                $percent = 100;
+            }
+            $keypoints = [];
+            $rawPoints = $doc['keypoints'] ?? [];
+            if (is_array($rawPoints)) {
+                foreach ($rawPoints as $point) {
+                    if (!is_array($point)) {
+                        continue;
+                    }
+                    $normalized = normalize_keypoint($point);
+                    if ($normalized['id'] === '') {
+                        continue;
+                    }
+                    $keypoints[] = $normalized;
+                }
+            }
+            $out['documents'][$name] = [
+                'provides' => (string) ($doc['provides'] ?? ''),
+                'coveragePercent' => $percent,
+                'coverageNote' => (string) ($doc['coverageNote'] ?? ''),
+                'keypoints' => $keypoints,
+                'checked' => !empty($doc['checked']),
+            ];
         }
     }
 
@@ -464,26 +341,120 @@ function normalize_phase2_suggestions($data): array
 }
 
 /**
- * @return array{panel: array{tasks: string, reference: string, articleCandidates: string}, items: array<string, string>}
+ * Merge checked flags from a GUI payload into an existing nav pack.
+ *
+ * @param array<string, mixed> $pack
+ * @param array<string, mixed> $payload
+ * @return array<string, mixed>
  */
-function parse_phase2_suggestions_md(string $raw): array
+function apply_nav_checked(array $pack, array $payload): array
 {
-    $panelKeys = phase2_suggestion_panel_keys();
+    $pack = normalize_nav_pack($pack);
+    $checked = $payload['checked'] ?? null;
+    if (!is_array($checked)) {
+        return $pack;
+    }
+
+    $guideChecked = $checked['guides'] ?? [];
+    if (is_array($guideChecked)) {
+        foreach ($pack['readingGuides'] as $i => $guide) {
+            $id = $guide['id'];
+            if (array_key_exists($id, $guideChecked)) {
+                $pack['readingGuides'][$i]['checked'] = !empty($guideChecked[$id]);
+            }
+        }
+    }
+
+    $mocChecked = $checked['moc'] ?? [];
+    if (is_array($mocChecked)) {
+        foreach ($pack['moc'] as $i => $node) {
+            $id = $node['id'];
+            if (array_key_exists($id, $mocChecked)) {
+                $pack['moc'][$i]['checked'] = !empty($mocChecked[$id]);
+            }
+        }
+    }
+
+    $docChecked = $checked['documents'] ?? [];
+    if (is_array($docChecked)) {
+        foreach ($pack['documents'] as $name => $doc) {
+            if (array_key_exists($name, $docChecked) && is_array($docChecked[$name])) {
+                if (array_key_exists('_doc', $docChecked[$name])) {
+                    $pack['documents'][$name]['checked'] = !empty($docChecked[$name]['_doc']);
+                }
+                $kpChecked = $docChecked[$name]['keypoints'] ?? [];
+                if (is_array($kpChecked)) {
+                    foreach ($pack['documents'][$name]['keypoints'] as $i => $kp) {
+                        $id = $kp['id'];
+                        if (array_key_exists($id, $kpChecked)) {
+                            $pack['documents'][$name]['keypoints'][$i]['checked'] = !empty($kpChecked[$id]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return $pack;
+}
+
+function phase1_responses_path(string $dir): string
+{
+    return $dir . '/phase1-responses.md';
+}
+
+/**
+ * @param mixed $data
+ * @return array{guides: array<string, string>, documents: array<string, string>, keypoints: array<string, string>, moc: array<string, string>}
+ */
+function normalize_phase1_responses($data): array
+{
     $out = [
-        'panel' => [
-            'tasks' => '',
-            'reference' => '',
-            'articleCandidates' => '',
-        ],
-        'items' => [],
+        'guides' => [],
+        'documents' => [],
+        'keypoints' => [],
+        'moc' => [],
+    ];
+    if (!is_array($data)) {
+        return $out;
+    }
+
+    foreach (['guides', 'documents', 'keypoints', 'moc'] as $bucket) {
+        $items = $data[$bucket] ?? null;
+        if (!is_array($items)) {
+            continue;
+        }
+        foreach ($items as $id => $text) {
+            $key = trim((string) $id);
+            $body = trim((string) $text);
+            if ($key === '' || $body === '') {
+                continue;
+            }
+            $out[$bucket][$key] = $body;
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * @return array{guides: array<string, string>, documents: array<string, string>, keypoints: array<string, string>, moc: array<string, string>}
+ */
+function parse_phase1_responses_md(string $raw): array
+{
+    $out = [
+        'guides' => [],
+        'documents' => [],
+        'keypoints' => [],
+        'moc' => [],
     ];
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
     $lines = explode("\n", $raw);
-    $section = null; // 'panel:{key}' | 'item:{id}'
+    $section = null;
     $buf = [];
 
-    $flush = static function () use (&$section, &$buf, &$out, $panelKeys): void {
+    $flush = static function () use (&$section, &$buf, &$out): void {
         if ($section === null) {
             $buf = [];
             return;
@@ -493,38 +464,42 @@ function parse_phase2_suggestions_md(string $raw): array
         if ($text === '') {
             return;
         }
-        if (strpos($section, 'panel:') === 0) {
-            $key = substr($section, 6);
-            if (in_array($key, $panelKeys, true)) {
-                $out['panel'][$key] = $text;
-            }
+        if (strpos($section, 'guide:') === 0) {
+            $out['guides'][substr($section, 6)] = $text;
             return;
         }
-        if (strpos($section, 'item:') === 0) {
-            $id = substr($section, 5);
-            if ($id !== '') {
-                $out['items'][$id] = $text;
-            }
+        if (strpos($section, 'doc:') === 0) {
+            $out['documents'][substr($section, 4)] = $text;
+            return;
+        }
+        if (strpos($section, 'keypoint:') === 0) {
+            $out['keypoints'][substr($section, 9)] = $text;
+            return;
+        }
+        if (strpos($section, 'moc:') === 0) {
+            $out['moc'][substr($section, 4)] = $text;
         }
     };
 
     foreach ($lines as $line) {
-        if (preg_match('/^##\s+Panel:\s*(tasks|reference|articleCandidates)\s*$/i', $line, $m)) {
+        if (preg_match('/^##\s+Guide:\s*(\S+)\s*$/i', $line, $m)) {
             $flush();
-            $keyMap = [
-                'tasks' => 'tasks',
-                'reference' => 'reference',
-                'articlecandidates' => 'articleCandidates',
-            ];
-            $key = $keyMap[strtolower($m[1])] ?? null;
-            if ($key !== null) {
-                $section = 'panel:' . $key;
-            }
+            $section = 'guide:' . trim($m[1]);
             continue;
         }
-        if (preg_match('/^##\s+Item:\s*(\S+)\s*$/i', $line, $m)) {
+        if (preg_match('/^##\s+Doc:\s*(.+?)\s*$/i', $line, $m)) {
             $flush();
-            $section = 'item:' . trim($m[1]);
+            $section = 'doc:' . trim($m[1]);
+            continue;
+        }
+        if (preg_match('/^##\s+Keypoint:\s*(\S+)\s*$/i', $line, $m)) {
+            $flush();
+            $section = 'keypoint:' . trim($m[1]);
+            continue;
+        }
+        if (preg_match('/^##\s+Moc:\s*(\S+)\s*$/i', $line, $m)) {
+            $flush();
+            $section = 'moc:' . trim($m[1]);
             continue;
         }
         if (preg_match('/^#\s+/', $line) && $section === null) {
@@ -536,73 +511,77 @@ function parse_phase2_suggestions_md(string $raw): array
     }
     $flush();
 
-    return normalize_phase2_suggestions($out);
+    return normalize_phase1_responses($out);
 }
 
 /**
- * @param array{panel: array{tasks: string, reference: string, articleCandidates: string}, items: array<string, string>} $data
+ * @param array{guides: array<string, string>, documents: array<string, string>, keypoints: array<string, string>, moc: array<string, string>} $data
  */
-function format_phase2_suggestions_md(array $data): string
+function format_phase1_responses_md(array $data): string
 {
-    $data = normalize_phase2_suggestions($data);
-    $parts = ["# Phase 2 suggestions", ''];
+    $data = normalize_phase1_responses($data);
+    $parts = ['# Phase 1 responses', ''];
 
-    foreach (phase2_suggestion_panel_keys() as $key) {
-        $panelText = $data['panel'][$key];
-        if ($panelText === '') {
-            continue;
-        }
-        $parts[] = '## Panel: ' . $key;
+    foreach ($data['guides'] as $id => $text) {
+        $parts[] = '## Guide: ' . $id;
         $parts[] = '';
-        $parts[] = $panelText;
+        $parts[] = $text;
         $parts[] = '';
     }
-
-    foreach ($data['items'] as $id => $text) {
-        $parts[] = '## Item: ' . $id;
+    foreach ($data['documents'] as $id => $text) {
+        $parts[] = '## Doc: ' . $id;
+        $parts[] = '';
+        $parts[] = $text;
+        $parts[] = '';
+    }
+    foreach ($data['keypoints'] as $id => $text) {
+        $parts[] = '## Keypoint: ' . $id;
+        $parts[] = '';
+        $parts[] = $text;
+        $parts[] = '';
+    }
+    foreach ($data['moc'] as $id => $text) {
+        $parts[] = '## Moc: ' . $id;
         $parts[] = '';
         $parts[] = $text;
         $parts[] = '';
     }
 
     $md = rtrim(implode("\n", $parts));
-    return $md === '# Phase 2 suggestions' ? "# Phase 2 suggestions\n" : $md . "\n";
+    return $md === '# Phase 1 responses' ? "# Phase 1 responses\n" : $md . "\n";
 }
 
 /**
- * @return array{panel: array{tasks: string, reference: string, articleCandidates: string}, items: array<string, string>}
+ * @return array{guides: array<string, string>, documents: array<string, string>, keypoints: array<string, string>, moc: array<string, string>}
  */
-function load_phase2_suggestions(string $dir): array
+function load_phase1_responses(string $dir): array
 {
-    $path = phase2_suggestions_path($dir);
+    $path = phase1_responses_path($dir);
     if (!is_file($path)) {
-        return normalize_phase2_suggestions(null);
+        return normalize_phase1_responses(null);
     }
     $raw = file_get_contents($path);
     if ($raw === false) {
-        return normalize_phase2_suggestions(null);
+        return normalize_phase1_responses(null);
     }
-    return parse_phase2_suggestions_md($raw);
+    return parse_phase1_responses_md($raw);
 }
 
 /**
  * @param array<string, mixed> $data
  */
-function save_phase2_suggestions(string $dir, array $data): bool
+function save_phase1_responses(string $dir, array $data): bool
 {
-    $normalized = normalize_phase2_suggestions($data);
-    $md = format_phase2_suggestions_md($normalized);
-    $path = phase2_suggestions_path($dir);
+    $normalized = normalize_phase1_responses($data);
+    $md = format_phase1_responses_md($normalized);
+    $path = phase1_responses_path($dir);
 
-    $panelEmpty = true;
-    foreach (phase2_suggestion_panel_keys() as $key) {
-        if ($normalized['panel'][$key] !== '') {
-            $panelEmpty = false;
-            break;
-        }
-    }
+    $empty = $normalized['guides'] === []
+        && $normalized['documents'] === []
+        && $normalized['keypoints'] === []
+        && $normalized['moc'] === [];
 
-    if ($panelEmpty && $normalized['items'] === []) {
+    if ($empty) {
         if (is_file($path)) {
             return unlink($path);
         }
@@ -610,4 +589,22 @@ function save_phase2_suggestions(string $dir, array $data): bool
     }
 
     return file_put_contents($path, $md) !== false;
+}
+
+/**
+ * @param array<string, mixed> $pack
+ * @return array{guides: int, documents: int, keypoints: int, moc: int}
+ */
+function nav_review_counts(array $pack): array
+{
+    $keypoints = 0;
+    foreach ($pack['documents'] as $doc) {
+        $keypoints += count($doc['keypoints'] ?? []);
+    }
+    return [
+        'guides' => count($pack['readingGuides']),
+        'documents' => count($pack['documents']),
+        'keypoints' => $keypoints,
+        'moc' => count($pack['moc']),
+    ];
 }
