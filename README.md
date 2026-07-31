@@ -2,49 +2,68 @@
 
 By Weng (Weng Fei Fung)
 
-For minds that face large technical documents, legal contracts, and financial pitches—and need a clear way to read them by need, see what each file provides, and hold keypoints or a map of content (MOC) with honest coverage.
-
-![Last Commit](https://img.shields.io/github/last-commit/Siphon880gh/adhd-scattered-notes-harness/main)
+![Last Commit](https://img.shields.io/github/last-commit/Siphon880gh/adhd-heavy-docs/main)
 [![GitHub](https://img.shields.io/badge/GitHub--blue?style=social&logo=GitHub)](https://github.com/Siphon880gh)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=flat&logo=linkedin&labelColor=blue)](https://www.linkedin.com/in/weng-fung/)
 [![Youtube](https://img.shields.io/badge/Youtube-red?style=flat&logo=youtube&labelColor=red)](https://www.youtube.com/@WayneTeachesCode/)
 
-A Cursor / Claude Code harness for turning a folder of heavy documents into navigable reading guides, per-file “what this provides,” keypoints / MOC, and coverage %.
+For minds that face large technical documents, legal contracts, and financial pitches—and need a clear way to read them by need, see what each file provides, hold keypoints or a map of content (MOC) with honest coverage, and quiz your understanding.
 
-The PHP app is an **artifact container**. The skill maps the pack in chat and writes artifacts next to your documents. You open `index.php` to **check the work and respond** on each card (saved for the next AI phase). Phase 2 finalizes in chat; the GUI shows the final pack.
+A Cursor / Claude Code harness for turning a folder of heavy documents into navigable reading guides, per-file “what this provides,” keypoints / MOC, and coverage %. Drop a pack under `inputs/`, ask in chat, and the **heavy-docs** skill walks Phase 1 → GUI review → Phase 2 until you have a final readable guide.
 
-## Roles
+The PHP app is an artifact container. The skill does the heavy organizing in Cursor or Claude Code and writes artifacts next to your notes. You open `index.php` to review them, make light adjustments in the browser (checks / Respond notes), then return to the chat for Phase 2 merges, fidelity fixes, and the rest.
 
-| Piece | Role |
-|-------|------|
-| `.agents/skills/heavy-docs` | Agent skill: list folders, ask which one, write artifacts, update config |
-| `app.config.json` | Points the app at one `inputs/` folder and the active phase |
-| `index.php` | Phase 1 review + respond; Phase 2 finalized navigation view |
+## Quick start
 
-There is **no folder switcher in the app**. The skill sets `app.config.json`; the app shows whatever that file points at.
+1. Put your documents in a folder under `inputs/`, for example:
 
-## Setup
+```
+inputs/business-plan-acme/
+  deck.pdf
+  model.xlsx
+  nda.docx
+  notes.md
+```
 
-1. Create a batch folder: `inputs/whatname/`
-2. Drop documents into that folder. Markdown and plain text work; so do **PDF, Word (`.doc`/`.docx`), Excel (`.xls`/`.xlsx`), CSV/TSV**, HTML, RTF, and similar. Excerpts or full files are fine. The skill extracts readable text from each format when mapping the pack.
-3. In Cursor or Claude Code, run the skill at `.agents/skills/heavy-docs` — it **lists folders under `inputs/`** and asks which to use.
-4. Serve the app and open it:
+`inputs/business-plan-acme/` is already set up for you (local only; `business-plan-*` folders are gitignored). Add your files there, or create another folder name under `inputs/`.
+
+2. In Cursor or Claude Code, prompt something like:
+
+```text
+Help me read business-plan-acme
+```
+
+If that folder exists under `inputs/`, the agent loads `.agents/skills/heavy-docs` and runs the phased workflow for you. You can also say **“start phase 1”**, **“start phase 2”**, or **“let’s continue”**.
+
+3. Serve the PHP app when you want to review artifacts in the browser:
 
 ```bash
 php -S localhost:8765
 ```
 
-Then open `http://localhost:8765`.
+Open `http://localhost:8765`.
 
-## Input layout
+## What you get
+
+| Piece | Role |
+|-------|------|
+| `.agents/skills/heavy-docs` | Agent skill: pick an `inputs/` folder, write artifacts, update config |
+| `app.config.json` | Points the app at one `inputs/` folder and the active phase |
+| `index.php` | Artifact container: Phase 1 review + respond; Phase 2 finalized navigation view |
+
+There is **no folder switcher in the app**. The skill sets `app.config.json`; the app shows whatever that file points at.
+
+## Supported inputs
+
+Markdown and plain text work; so do **PDF, Word (`.doc`/`.docx`), Excel (`.xls`/`.xlsx`), CSV/TSV**, HTML, RTF, PowerPoint, and similar. Excerpts or full files are fine. The skill extracts readable text from each format when mapping the pack.
 
 ```
 app.config.json
 inputs/
-  whatname/
-    contract.pdf
+  business-plan-acme/        # your pack (example name)
+    deck.pdf
     model.xlsx
-    pitch.docx
+    nda.docx
     notes.md
     phase1.json              # reading guides + per-doc coverage/keypoints + MOC
     phase1-responses.md      # optional: your Respond notes from the GUI
@@ -55,18 +74,18 @@ inputs/
 
 ```json
 {
-  "inputFolder": "whatname",
+  "inputFolder": "business-plan-acme",
   "phase": 1
 }
 ```
 
-`phase` may be `1` or `2`.
+`phase` may be `1` or `2`. Empty `inputFolder` means no project selected yet.
 
-## Two phases
+## Workflow (automatic via the skill)
 
 ### Phase 1 — map, then check in the GUI
 
-The skill reads the documents and writes `phase1.json`:
+Ask in chat (e.g. *Help me read business-plan-acme*). The skill reads the documents and writes `phase1.json`:
 
 - **Reading guides** — how to read the pack based on different needs
 - **Per document** — what it provides, coverage %, coverage note, keypoints
@@ -78,15 +97,20 @@ Use **Quiz** on a card or source file to open a copyable prompt for Cursor / Cla
 
 ### Phase 2 — finalize in AI chat
 
-When Phase 1 looks good, return to chat and start Phase 2. The skill reads your GUI responses, writes `phase2.json`, and sets phase 2. Visit the GUI to see the final pack. You can always say **Revert to Phase 1** in chat, then refresh.
+When Phase 1 looks good, return to chat and start Phase 2 (or say **“let’s continue”**). The skill reads your GUI responses, writes `phase2.json`, and sets phase 2. Visit the GUI to see the final pack. You can always say **Revert to Phase 1** in chat, then refresh.
 
-## Skill handoff
+### Handoff checklist
 
-1. Skill lists `inputs/` folders and asks which one
-2. Skill writes Phase 1 artifacts and sets `app.config.json`
-3. You review and respond in `index.php`
-4. You go back to chat to finalize Phase 2 (or remap / revert)
+1. Drop docs into `inputs/{folder}/`
+2. Prompt in chat — skill lists folders if needed, or uses the name you gave
+3. Skill writes Phase 1 artifacts and sets `app.config.json`
+4. You review and respond in `index.php`
+5. Back to chat for Phase 2 finalization (or remap / revert)
 
-## Sample
+## Try the sample
 
 `inputs/sample/` includes short excerpts: payments API design, mutual NDA, and a seed term sheet — enough to exercise technical, legal, and financial reading paths.
+
+```text
+Help me read sample
+```
