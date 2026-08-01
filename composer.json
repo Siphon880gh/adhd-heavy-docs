@@ -1,0 +1,15 @@
+{
+    "name": "siphon880gh/heavy-docs",
+    "description": "Heavy Docs artifact GUI",
+    "type": "project",
+    "license": "MIT",
+    "minimum-stability": "stable",
+    "require": {
+        "phpoffice/phpspreadsheet": "^1.29"
+    },
+    "config": {
+        "platform": {
+            "php": "7.4.33"
+        }
+    }
+}

@@ -1,13 +1,85 @@
 <?php
 declare(strict_types=1);
 
+$autoload = __DIR__ . '/vendor/autoload.php';
+if (is_file($autoload)) {
+    try {
+        require_once $autoload;
+    } catch (Throwable $e) {
+        // Spreadsheet preview unavailable (e.g. PHP too old for vendor platform check).
+    }
+}
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/spreadsheet.php';
 
 $config = load_config();
 $folder = $config['inputFolder'];
 $phase = $config['phase'];
 $dir = $folder !== '' ? input_dir($folder) : '';
 $folderExists = $folder !== '' && is_dir($dir);
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && isset($_GET['action'])
+    && (string) $_GET['action'] === 'sheet-preview'
+) {
+    header('Content-Type: application/json; charset=utf-8');
+    $name = isset($_GET['file']) ? (string) $_GET['file'] : '';
+    $name = basename(str_replace(["\0", '\\'], '', $name));
+    $docFiles = $folderExists ? list_doc_files($dir) : [];
+    if (
+        !$folderExists
+        || $name === ''
+        || !in_array($name, $docFiles, true)
+        || !is_spreadsheet_previewable($name)
+    ) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Spreadsheet not found.']);
+        exit;
+    }
+    if (!spreadsheet_library_available()) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'PhpSpreadsheet is not installed. Run composer install.']);
+        exit;
+    }
+    $built = build_spreadsheet_preview_html($dir . '/' . $name);
+    if (!$built['ok']) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => $built['error']]);
+        exit;
+    }
+    echo json_encode(['ok' => true, 'html' => $built['html']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && isset($_GET['action'])
+    && (string) $_GET['action'] === 'raw-file'
+) {
+    $name = isset($_GET['file']) ? (string) $_GET['file'] : '';
+    $name = basename(str_replace(["\0", '\\'], '', $name));
+    $docFiles = $folderExists ? list_doc_files($dir) : [];
+    if (!$folderExists || $name === '' || !in_array($name, $docFiles, true)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'File not found.';
+        exit;
+    }
+    $path = $dir . '/' . $name;
+    if (!is_file($path)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'File not found.';
+        exit;
+    }
+    header('Content-Type: ' . mime_for_source_file($name));
+    header('Content-Length: ' . (string) filesize($path));
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Disposition: inline; filename="' . rawurlencode($name) . '"');
+    readfile($path);
+    exit;
+}
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST'
@@ -211,6 +283,47 @@ function render_quiz_button(string $modalTitle, string $prompt): void
     echo '<span>Quiz</span>';
     echo '</button>';
 }
+
+/**
+ * @param list<string> $docFiles
+ */
+function render_doc_open_link(
+    string $file,
+    array $docFiles,
+    string $label = '',
+    ?int $line = null,
+    ?int $endLine = null,
+    ?string $anchor = null
+): void {
+    $label = $label !== '' ? $label : $file;
+    $known = in_array($file, $docFiles, true);
+    if (!$known) {
+        echo '<span class="doc-ref doc-ref--missing" title="File not in this pack">' . e($label) . '</span>';
+        return;
+    }
+    echo '<button type="button" class="doc-ref" data-open-doc="' . e($file) . '"';
+    if ($line !== null) {
+        echo ' data-open-line="' . e((string) $line) . '"';
+    }
+    if ($endLine !== null) {
+        echo ' data-open-end-line="' . e((string) $endLine) . '"';
+    }
+    if ($anchor !== null && $anchor !== '') {
+        echo ' data-open-anchor="' . e($anchor) . '"';
+    }
+    $title = 'Open ' . $file;
+    if ($line !== null) {
+        $title .= $endLine !== null && $endLine !== $line
+            ? ' (lines ' . $line . '–' . $endLine . ')'
+            : ' (line ' . $line . ')';
+    } elseif ($anchor !== null && $anchor !== '') {
+        $title .= ' (' . $anchor . ')';
+    }
+    echo ' title="' . e($title) . '"';
+    echo ' aria-label="' . e($title) . '">';
+    echo e($label);
+    echo '</button>';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -221,9 +334,9 @@ function render_quiz_button(string $modalTitle, string $prompt): void
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/app.css?v=2.2">
+    <link rel="stylesheet" href="assets/app.css?v=2.6">
 </head>
-<body<?= $reviewLocked ? '' : ' data-phase1-editable="1"' ?><?= $folderExists ? ' data-quiz-ready="1"' : '' ?>>
+<body<?= $reviewLocked ? '' : ' data-phase1-editable="1"' ?><?= $folderExists ? ' data-quiz-ready="1"' : '' ?><?= $folderExists ? ' data-doc-viewer="1"' : '' ?>>
 <header class="app-header">
     <a href="index.php" class="app-header__brand">Heavy Docs</a>
     <div class="app-header__meta">
@@ -352,7 +465,7 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                             <?php if ($guide['order'] !== []): ?>
                                 <ol class="read-order">
                                     <?php foreach ($guide['order'] as $name): ?>
-                                        <li><a href="#doc-<?= e($name) ?>"><?= e($name) ?></a></li>
+                                        <li><?php render_doc_open_link($name, $docFiles); ?></li>
                                     <?php endforeach; ?>
                                 </ol>
                             <?php endif; ?>
@@ -396,7 +509,7 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                         <div class="item-card__main">
                             <div class="item-card__title-row">
                                 <?php render_check_button($checked, $reviewLocked, $checked ? 'Unmark document' : 'Mark document reviewed'); ?>
-                                <h3><?= e($filename) ?></h3>
+                                <h3><?php render_doc_open_link($filename, $docFiles, $filename); ?></h3>
                                 <?php render_quiz_button('Quiz: ' . $filename, $docQuiz); ?>
                                 <span class="pill"><?= e($pack['kind']) ?></span>
                             </div>
@@ -436,7 +549,22 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                                                 <p class="item-card__body-text"><?= e((string) $kp['body']) ?></p>
                                             <?php endif; ?>
                                             <?php if ($kp['sources'] !== []): ?>
-                                                <div class="item-card__meta"><?= e(implode(', ', $kp['sources'])) ?></div>
+                                                <div class="item-card__meta item-card__sources">
+                                                    <?php foreach ($kp['sources'] as $i => $src):
+                                                        $ref = parse_source_ref($src);
+                                                        if ($i > 0) {
+                                                            echo '<span class="item-card__sources-sep">, </span>';
+                                                        }
+                                                        render_doc_open_link(
+                                                            $ref['file'],
+                                                            $docFiles,
+                                                            $src,
+                                                            $ref['line'],
+                                                            $ref['endLine'],
+                                                            $ref['anchor']
+                                                        );
+                                                    endforeach; ?>
+                                                </div>
                                             <?php endif; ?>
                                             <?php render_response_box('keypoints', $kid, $responses['keypoints'], $reviewLocked, 'e.g. survival is 5 years for trade secrets…'); ?>
                                         </div>
@@ -493,7 +621,7 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                                 <ul class="moc-links">
                                     <?php foreach ($node['links'] as $link): ?>
                                         <li>
-                                            <a href="#doc-<?= e((string) $link['file']) ?>"><?= e((string) $link['file']) ?></a>
+                                            <?php render_doc_open_link((string) $link['file'], $docFiles); ?>
                                             <?php if ((string) $link['note'] !== ''): ?>
                                                 <span class="muted"> — <?= e((string) $link['note']) ?></span>
                                             <?php endif; ?>
@@ -513,6 +641,7 @@ function render_quiz_button(string $modalTitle, string $prompt): void
 
     <?php if ($docFiles !== []):
         $openSource = isset($_GET['file']) && $activeFile !== '';
+        $rawFileBase = 'index.php?action=raw-file&file=';
         ?>
     <div class="source-dock<?= $openSource ? ' is-open' : '' ?>" data-source-dock>
         <button type="button" class="source-dock__fab" data-source-toggle aria-expanded="<?= $openSource ? 'true' : 'false' ?>" aria-controls="source-panel" title="Source files" aria-label="Toggle source files">
@@ -524,11 +653,11 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                 <polyline points="10 9 9 9 8 9"/>
             </svg>
         </button>
-        <aside id="source-panel" class="source-dock__panel" data-source-panel<?= $openSource ? '' : ' hidden' ?> aria-label="Source files">
+        <aside id="source-panel" class="source-dock__panel source-dock__panel--list" data-source-panel<?= $openSource ? '' : ' hidden' ?> aria-label="Source files">
             <div class="source-dock__header">
                 <div>
                     <h2>Source files</h2>
-                    <p class="muted">Raw documents in this folder.</p>
+                    <p class="muted">Open a document in the viewer.</p>
                 </div>
                 <button type="button" class="source-dock__close" data-source-toggle aria-label="Collapse source files" title="Collapse">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -544,40 +673,77 @@ function render_quiz_button(string $modalTitle, string $prompt): void
                     );
                     ?>
                     <div class="source-dock__file-row">
-                        <button type="button" class="source-dock__file<?= $name === $activeFile ? ' is-active' : '' ?>" data-source-file="<?= e($name) ?>" aria-pressed="<?= $name === $activeFile ? 'true' : 'false' ?>">
+                        <button type="button" class="source-dock__file<?= $name === $activeFile ? ' is-active' : '' ?>" data-open-doc="<?= e($name) ?>" data-source-file="<?= e($name) ?>" aria-pressed="<?= $name === $activeFile ? 'true' : 'false' ?>">
                             <?= e($name) ?>
                         </button>
                         <?php render_quiz_button('Quiz: ' . $name, $fileQuiz); ?>
                     </div>
                 <?php endforeach; ?>
             </nav>
-            <div class="source-dock__body">
-                <?php foreach ($docFiles as $name):
-                    $path = $dir . '/' . $name;
-                    $isActive = $name === $activeFile;
-                    $previewable = is_text_previewable($name);
-                    $raw = '';
-                    if ($previewable && is_file($path)) {
-                        $raw = (string) file_get_contents($path);
-                    }
-                    ?>
-                    <div class="source-dock__doc" data-source-doc="<?= e($name) ?>"<?= $isActive ? '' : ' hidden' ?>>
-                        <h3 class="source-dock__doc-title"><?= e($name) ?></h3>
-                        <?php if ($previewable): ?>
-                            <pre class="source-view"><?= e($raw) ?></pre>
-                        <?php else: ?>
-                            <p class="muted">
-                                Binary / office format — listed in the pack; the heavy-docs skill extracts text when mapping in chat.
-                                Open the file locally to inspect the original.
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
         </aside>
+    </div>
+
+    <div class="doc-store" data-doc-store hidden aria-hidden="true">
+        <?php foreach ($docFiles as $name):
+            $path = $dir . '/' . $name;
+            $previewable = is_text_previewable($name);
+            $spreadsheet = is_spreadsheet_previewable($name);
+            $embeddable = is_browser_embeddable($name);
+            $rawUrl = $rawFileBase . rawurlencode($name);
+            $sheetLazyUrl = 'index.php?action=sheet-preview&file=' . rawurlencode($name);
+            if ($previewable && is_file($path)) {
+                $raw = (string) file_get_contents($path);
+                $lines = preg_split("/\r\n|\n|\r/", $raw);
+                if ($lines === false) {
+                    $lines = [$raw];
+                }
+                echo '<div data-doc-content="' . e($name) . '" data-doc-kind="text" data-doc-url="' . e($rawUrl) . '">';
+                echo '<pre class="source-view source-view--lined">';
+                foreach ($lines as $i => $line) {
+                    $n = $i + 1;
+                    echo '<span class="source-line" data-line="' . $n . '">';
+                    echo '<span class="source-line__n" aria-hidden="true">' . $n . '</span>';
+                    echo '<span class="source-line__t">' . e($line) . '</span>';
+                    echo '</span>';
+                }
+                echo '</pre></div>';
+            } elseif ($spreadsheet && is_file($path)) {
+                echo '<div data-doc-content="' . e($name) . '" data-doc-kind="spreadsheet" data-doc-url="' . e($rawUrl) . '" data-doc-lazy-url="' . e($sheetLazyUrl) . '">';
+                echo '<div class="sheet-preview sheet-preview--pending" data-sheet-pending>';
+                echo '<p class="muted">Loading spreadsheet preview…</p>';
+                echo '</div></div>';
+            } elseif ($embeddable && is_file($path)) {
+                echo '<div data-doc-content="' . e($name) . '" data-doc-kind="embed" data-doc-url="' . e($rawUrl) . '">';
+                echo '<iframe class="doc-embed" title="' . e($name) . '" src="' . e($rawUrl) . '"></iframe>';
+                echo '</div>';
+            } else {
+                echo '<div data-doc-content="' . e($name) . '" data-doc-kind="binary" data-doc-url="' . e($rawUrl) . '">';
+                echo '<div class="doc-binary">';
+                echo '<p class="muted">Binary / office format — listed in the pack; the heavy-docs skill extracts text when mapping in chat. Download the original to inspect it locally.</p>';
+                echo '<a class="doc-binary__download" href="' . e($rawUrl) . '" download="' . e($name) . '">Download ' . e($name) . '</a>';
+                echo '</div></div>';
+            }
+        endforeach; ?>
     </div>
     <?php endif; ?>
 <?php endif; ?>
+
+<div class="doc-modal" data-doc-modal hidden>
+    <div class="doc-modal__backdrop" data-doc-minimize></div>
+    <div class="doc-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+        <div class="doc-modal__header">
+            <h2 id="doc-modal-title" data-doc-modal-title>Document</h2>
+            <a class="doc-modal__download" data-doc-download href="#" download hidden title="Download file">Download</a>
+            <button type="button" class="doc-modal__btn" data-doc-minimize title="Minimize" aria-label="Minimize">─</button>
+            <button type="button" class="doc-modal__btn doc-modal__btn--close" data-doc-close aria-label="Close">×</button>
+        </div>
+        <div class="doc-modal__body" data-doc-modal-body></div>
+    </div>
+</div>
+
+<div class="doc-taskbar" data-doc-taskbar hidden aria-label="Open documents">
+    <div class="doc-taskbar__items" data-doc-taskbar-items></div>
+</div>
 
 <div class="note-modal" data-quiz-modal hidden>
     <div class="note-modal__backdrop" data-quiz-close></div>
@@ -598,6 +764,6 @@ function render_quiz_button(string $modalTitle, string $prompt): void
     </div>
 </div>
 
-<script src="assets/app.js?v=2.2" defer></script>
+<script src="assets/app.js?v=2.6" defer></script>
 </body>
 </html>

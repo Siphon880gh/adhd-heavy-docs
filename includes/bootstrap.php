@@ -88,6 +88,82 @@ function is_text_previewable(string $name): bool
     return $ext !== '' && in_array($ext, text_preview_extensions(), true);
 }
 
+function is_browser_embeddable(string $name): bool
+{
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    return in_array($ext, ['pdf', 'html', 'htm'], true);
+}
+
+function mime_for_source_file(string $name): string
+{
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $map = [
+        'md' => 'text/markdown; charset=utf-8',
+        'txt' => 'text/plain; charset=utf-8',
+        'csv' => 'text/csv; charset=utf-8',
+        'tsv' => 'text/tab-separated-values; charset=utf-8',
+        'html' => 'text/html; charset=utf-8',
+        'htm' => 'text/html; charset=utf-8',
+        'rtf' => 'application/rtf',
+        'pdf' => 'application/pdf',
+        'doc' => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls' => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt' => 'application/vnd.ms-powerpoint',
+        'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+    return $map[$ext] ?? 'application/octet-stream';
+}
+
+/**
+ * Parse refs like "nda.md", "nda.md:40", "nda.md:40-48", or "nda.md:Auth".
+ *
+ * @return array{file: string, line: int|null, endLine: int|null, anchor: string|null}
+ */
+function parse_source_ref(string $src): array
+{
+    $empty = ['file' => '', 'line' => null, 'endLine' => null, 'anchor' => null];
+    $text = trim($src);
+    if ($text === '') {
+        return $empty;
+    }
+
+    if (preg_match('/^(.+):(\d+)(?:-(\d+))?$/', $text, $m)) {
+        $start = (int) $m[2];
+        $end = isset($m[3]) && $m[3] !== '' ? (int) $m[3] : $start;
+        if ($start < 1) {
+            $start = 1;
+        }
+        if ($end < $start) {
+            $end = $start;
+        }
+        return [
+            'file' => trim($m[1]),
+            'line' => $start,
+            'endLine' => $end,
+            'anchor' => null,
+        ];
+    }
+
+    if (preg_match('/^(.+\.[A-Za-z0-9]+):(.+)$/', $text, $m)) {
+        $anchor = trim($m[2]);
+        return [
+            'file' => trim($m[1]),
+            'line' => null,
+            'endLine' => null,
+            'anchor' => $anchor !== '' ? $anchor : null,
+        ];
+    }
+
+    return [
+        'file' => $text,
+        'line' => null,
+        'endLine' => null,
+        'anchor' => null,
+    ];
+}
+
 /**
  * @return list<string>
  */
