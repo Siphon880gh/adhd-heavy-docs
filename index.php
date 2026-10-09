@@ -760,6 +760,20 @@ function render_doc_open_link(
             Paste this into <strong>Cursor or Claude Code</strong> (the chat behind this visual artifact container).
             The quiz runs there — not in this GUI. Return to that chat to get quizzed.
         </p>
+        <details class="why-not-auto">
+            <summary class="why-not-auto__summary"><span class="why-not-auto__icon" aria-hidden="true">i</span> Why is this not automatic</summary>
+            <div class="why-not-auto__body">
+                <p>Weng provides this service for free and cannot cover the ongoing cost of AI tokens. That's why this Prompt Builder is designed to let users supply their own AI processing resources rather than having the app pay for them. This is also why AI processing isn't integrated directly into the app for a more seamless experience.</p>
+                <p>There are several ways to accomplish this:</p>
+                <ol>
+                    <li><strong>Copy the generated prompt into ChatGPT or Claude:</strong> Users can use their existing AI subscriptions to process the prompt.</li>
+                    <li><strong>Copy the generated prompt into an AI harness like Cursor or Claude Code:</strong> Users can leverage their own AI coding environments and available token allowances.</li>
+                    <li><strong>Provide their own API key:</strong> The app could process prompts directly using the user's API key, with usage billed to the user. However, this requires trusting that the app does not store, log, or copy the key. This is generally easier to verify with a locally running application or a Chrome extension, although neither is inherently secure without reviewing how it handles credentials.</li>
+                </ol>
+                <p><strong>For now, letting you use your own AI tools is the most practical approach.</strong> It keeps the service free while allowing you to use AI resources you already have access to. This app uses the method best suited to its particular workflow.</p>
+                <p>If the service eventually becomes commercial and can sustain the cost of AI tokens, AI processing could be integrated directly into the app for a more seamless experience.</p>
+            </div>
+        </details>
         <pre class="note-modal__body" data-quiz-modal-body></pre>
     </div>
 </div>

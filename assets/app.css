@@ -1592,6 +1592,62 @@ body.is-showing-shortcuts .app-header__menu > svg {
   line-height: 1.45;
 }
 
+.why-not-auto {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.why-not-auto__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.why-not-auto__summary::-webkit-details-marker {
+  display: none;
+}
+
+.why-not-auto__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.why-not-auto__body {
+  margin-top: 0.45rem;
+  max-width: 42rem;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.why-not-auto__body p,
+.why-not-auto__body ol {
+  margin: 0 0 0.45rem;
+}
+
+.why-not-auto__body ol {
+  padding-left: 1.2rem;
+}
+
+.why-not-auto__body li + li {
+  margin-top: 0.3rem;
+}
+
 .quiz-btn {
   display: inline-flex;
   align-items: center;
