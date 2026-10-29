@@ -7,6 +7,65 @@
     return Array.prototype.slice.call((root || document).querySelectorAll(sel));
   }
 
+  // --- Project switcher ---
+  (function initProjects() {
+    var menu = qs("[data-projects-menu]");
+    var toggle = qs("[data-projects-toggle]");
+    var panel = qs("[data-projects-panel]");
+
+    function setProjectsOpen(open) {
+      if (!toggle || !panel) return;
+      panel.hidden = !open;
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    if (toggle && panel) {
+      toggle.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setProjectsOpen(panel.hidden);
+      });
+    }
+
+    document.addEventListener("click", function (e) {
+      var button = e.target.closest("[data-switch-project]");
+      if (button) {
+        e.preventDefault();
+        var name = button.getAttribute("data-switch-project") || "";
+        var current = menu ? menu.getAttribute("data-current-project") || "" : "";
+        if (name !== "" && name === current) {
+          setProjectsOpen(false);
+          return;
+        }
+        button.disabled = true;
+        fetch("index.php?action=switch-project", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder: name }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              if (!res.ok || !data || !data.ok) {
+                throw new Error((data && data.error) || "Could not switch project");
+              }
+              window.location.href = "index.php";
+            });
+          })
+          .catch(function (err) {
+            button.disabled = false;
+            window.alert(err && err.message ? err.message : "Could not switch project");
+          });
+        return;
+      }
+      if (!menu || !e.target.closest("[data-projects-menu]")) {
+        setProjectsOpen(false);
+      }
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setProjectsOpen(false);
+    });
+  })();
+
   function initSourceDock() {
     var dock = qs("[data-source-dock]");
     if (!dock) return;

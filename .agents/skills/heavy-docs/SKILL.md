@@ -11,7 +11,7 @@ description: >-
 
 # Heavy Docs Harness
 
-This skill runs in **Cursor or Claude Code**. The PHP app (`index.php`) is an artifact container: write artifacts here, tell the user to open the GUI, they check work and respond per item in the browser, then continue in chat. Do not switch folders inside the app—only via `app.config.json`.
+This skill runs in **Cursor or Claude Code**. The PHP app (`index.php`) is an artifact container: write artifacts here, tell the user to open the GUI, they check work and respond per item in the browser, then continue in chat. Each folder under `inputs/` is its own project. The app’s **Projects** menu switches the live folder and restores that project’s phase by writing `app.config.json`. You may also switch by writing that file.
 
 ## Product framing (verbatim)
 
@@ -42,7 +42,7 @@ Project root:
 
 | File | Role |
 |------|------|
-| `app.config.json` | `{ "inputFolder": "{folder}" \| "", "phase": 1 \| 2 }` — skill owns this; empty `inputFolder` means no project selected |
+| `app.config.json` | `{ "inputFolder": "{folder}" \| "", "phase": 1 \| 2, "projects": { "{folder}": { "phase": 1 \| 2 } } }` — empty `inputFolder` means no project selected. The app’s Projects menu and this skill both write it. Whenever you write it, keep the existing `projects` object and set `projects["{inputFolder}"].phase` to the phase you write; never drop other folders’ phases. On every start, read it again, since the user may have switched projects in the browser. |
 
 **Source extensions (treat as documents):** `.md`, `.txt`, `.csv`, `.tsv`, `.pdf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.rtf`, `.html`, `.htm`, `.pages`, `.numbers`, `.key` when present. Include other office/data files in the folder if they are clearly part of the pack.
 

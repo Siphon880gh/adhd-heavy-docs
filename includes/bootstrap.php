@@ -11,13 +11,84 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function normalize_phase(int $phase): int
+{
+    return $phase === 2 ? 2 : 1;
+}
+
+function app_config_path(): string
+{
+    return app_root() . '/app.config.json';
+}
+
 /**
- * @return array{inputFolder: string, phase: int}
+ * Folder names directly under inputs/. Each one is a separate project.
+ *
+ * @return list<string>
+ */
+function list_input_projects(): array
+{
+    $root = app_root() . '/inputs';
+    if (!is_dir($root)) {
+        return [];
+    }
+
+    $names = [];
+    foreach (scandir($root) ?: [] as $name) {
+        if ($name === '.' || $name === '..' || str_starts_with($name, '.')) {
+            continue;
+        }
+        if (is_dir($root . '/' . $name)) {
+            $names[] = $name;
+        }
+    }
+
+    natcasesort($names);
+    return array_values($names);
+}
+
+/**
+ * Phase for a project nothing has remembered yet: Phase 2 once phase2.json exists.
+ */
+function infer_project_phase(string $folder): int
+{
+    return is_file(input_dir($folder) . '/phase2.json') ? 2 : 1;
+}
+
+/**
+ * @param mixed $raw
+ * @return array<string, array{phase: int}>
+ */
+function normalize_project_registry($raw): array
+{
+    if (!is_array($raw)) {
+        return [];
+    }
+    $out = [];
+    foreach ($raw as $name => $row) {
+        $name = basename(str_replace('\\', '/', trim((string) $name)));
+        if ($name === '' || $name === '.' || $name === '..') {
+            continue;
+        }
+        $phase = 1;
+        if (is_array($row) && isset($row['phase'])) {
+            $phase = (int) $row['phase'];
+        } elseif (is_numeric($row)) {
+            $phase = (int) $row;
+        }
+        $out[$name] = ['phase' => normalize_phase($phase)];
+    }
+    ksort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}
+
+/**
+ * @return array{inputFolder: string, phase: int, projects: array<string, array{phase: int}>}
  */
 function load_config(): array
 {
-    $path = app_root() . '/app.config.json';
-    $defaults = ['inputFolder' => '', 'phase' => 1];
+    $path = app_config_path();
+    $defaults = ['inputFolder' => '', 'phase' => 1, 'projects' => []];
 
     if (!is_file($path)) {
         return $defaults;
@@ -34,15 +105,98 @@ function load_config(): array
     }
 
     $folder = isset($data['inputFolder']) ? trim((string) $data['inputFolder']) : '';
-    $phase = isset($data['phase']) ? (int) $data['phase'] : 1;
-    if ($phase !== 2) {
-        $phase = 1;
+    $folder = basename(str_replace('\\', '/', $folder));
+    if ($folder === '.' || $folder === '..') {
+        $folder = '';
     }
+    $phase = isset($data['phase']) ? normalize_phase((int) $data['phase']) : 1;
 
     return [
         'inputFolder' => $folder,
         'phase' => $phase,
+        'projects' => normalize_project_registry($data['projects'] ?? null),
     ];
+}
+
+/**
+ * Phase shown for a project. The live folder uses the top-level phase,
+ * then a remembered phase, then whatever the artifacts on disk suggest.
+ *
+ * @param array{inputFolder: string, phase: int, projects: array<string, array{phase: int}>} $config
+ */
+function project_phase_for(array $config, string $folder): int
+{
+    if ($folder !== '' && $folder === ($config['inputFolder'] ?? '')) {
+        return normalize_phase((int) ($config['phase'] ?? 1));
+    }
+    if (isset($config['projects'][$folder]['phase'])) {
+        return normalize_phase((int) $config['projects'][$folder]['phase']);
+    }
+    return infer_project_phase($folder);
+}
+
+/**
+ * @param array<string, array{phase: int}> $projects
+ */
+function save_app_config(string $folder, int $phase, array $projects): bool
+{
+    $folder = basename(str_replace('\\', '/', trim($folder)));
+    if ($folder === '.' || $folder === '..') {
+        $folder = '';
+    }
+    $phase = normalize_phase($phase);
+    $projects = normalize_project_registry($projects);
+    if ($folder !== '') {
+        $projects[$folder] = ['phase' => $phase];
+        ksort($projects, SORT_NATURAL | SORT_FLAG_CASE);
+    }
+
+    $json = json_encode(
+        [
+            'inputFolder' => $folder,
+            'phase' => $phase,
+            'projects' => $projects === [] ? new stdClass() : $projects,
+        ],
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    );
+    if ($json === false) {
+        return false;
+    }
+    return file_put_contents(app_config_path(), $json . "\n") !== false;
+}
+
+/**
+ * Remember the live phase and fill in projects that have never been opened.
+ *
+ * @return array{inputFolder: string, phase: int, projects: array<string, array{phase: int}>}
+ */
+function ensure_project_registry(): array
+{
+    $config = load_config();
+    $projects = $config['projects'];
+    $known = list_input_projects();
+    $knownSet = array_fill_keys($known, true);
+    foreach (array_keys($projects) as $name) {
+        if (!isset($knownSet[$name])) {
+            unset($projects[$name]);
+        }
+    }
+    foreach ($known as $name) {
+        if (!isset($projects[$name])) {
+            $projects[$name] = ['phase' => infer_project_phase($name)];
+        }
+    }
+    $folder = $config['inputFolder'];
+    $phase = $config['phase'];
+    if ($folder !== '' && isset($knownSet[$folder])) {
+        $projects[$folder] = ['phase' => $phase];
+    }
+
+    if (json_encode($config['projects']) !== json_encode(normalize_project_registry($projects))) {
+        save_app_config($folder, $phase, $projects);
+        $config = load_config();
+    }
+    return $config;
 }
 
 function input_dir(string $folder): string

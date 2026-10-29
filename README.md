@@ -51,7 +51,7 @@ Open `http://localhost:8765`.
 | `app.config.json` | Points the app at one `inputs/` folder and the active phase |
 | `index.php` | Artifact container: Phase 1 review + respond; Phase 2 finalized navigation view |
 
-There is **no folder switcher in the app**. The skill sets `app.config.json`; the app shows whatever that file points at.
+Each folder under `inputs/` is a separate project. Use **Projects** in the app header to switch between them. That writes `app.config.json` and restores the phase that project was last on. The skill can also point the file at a folder.
 
 ## Supported inputs
 
@@ -79,7 +79,7 @@ inputs/
 }
 ```
 
-`phase` may be `1` or `2`. Empty `inputFolder` means no project selected yet.
+`phase` may be `1` or `2`. It is the phase of `inputFolder`. Empty `inputFolder` means no project selected yet. The app also keeps a `projects` map (for example `"projects": { "business-plan-acme": { "phase": 1 } }`) so switching projects doesn't reset each one's phase. When you edit the file by hand, keep `projects` and set `projects[inputFolder].phase` to the phase you write.
 
 ## Workflow (automatic via the skill)
 
