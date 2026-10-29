@@ -199,20 +199,81 @@ $reviewLocked = $phase === 2;
 $showEmpty = !$folderExists;
 
 /**
- * @param list<array{label: string, count: int}> $items
+ * Jump links for the count bar dropdowns, one per card in the pack.
+ *
+ * @param array<string, mixed> $pack
+ * @return array{guides: list<array<string, mixed>>, documents: list<array<string, mixed>>, keypoints: list<array<string, mixed>>, moc: list<array<string, mixed>>}
+ */
+function nav_review_jumps(array $pack): array
+{
+    $out = ['guides' => [], 'documents' => [], 'keypoints' => [], 'moc' => []];
+    foreach ($pack['readingGuides'] as $guide) {
+        $text = trim((string) $guide['need']) !== '' ? (string) $guide['need'] : (string) $guide['id'];
+        $out['guides'][] = ['id' => 'guide-' . $guide['id'], 'text' => $text, 'checked' => !empty($guide['checked'])];
+    }
+    foreach ($pack['documents'] as $filename => $doc) {
+        $out['documents'][] = ['id' => 'doc-' . $filename, 'text' => (string) $filename, 'checked' => !empty($doc['checked'])];
+        foreach ($doc['keypoints'] ?? [] as $kp) {
+            $kid = (string) ($kp['id'] ?? '');
+            if ($kid === '') {
+                continue;
+            }
+            $out['keypoints'][] = [
+                'id' => 'kp-' . $filename . '-' . $kid,
+                'text' => (string) ($kp['title'] ?? $kid),
+                'title' => $filename . ' · ' . (string) ($kp['title'] ?? $kid),
+                'checked' => !empty($kp['checked']),
+            ];
+        }
+    }
+    foreach ($pack['moc'] as $node) {
+        $out['moc'][] = ['id' => 'moc-' . $node['id'], 'text' => (string) $node['title'], 'checked' => !empty($node['checked'])];
+    }
+    return $out;
+}
+
+/**
+ * Count bar. Items with "jumps" open a dropdown of links that scroll to each card.
+ *
+ * @param list<array{label: string, count: int, jumps?: list<array<string, mixed>>, alignEnd?: bool}> $items
  */
 function render_count_bar(array $items, string $ariaLabel): void
 {
-    echo '<div class="bucket-counts" aria-label="' . e($ariaLabel) . '">';
+    echo '<div class="bucket-counts" data-bucket-counts aria-label="' . e($ariaLabel) . '">';
     $first = true;
     foreach ($items as $item) {
         if (!$first) {
             echo '<span class="bucket-counts__divider" aria-hidden="true"></span>';
         }
         $first = false;
-        echo '<span class="bucket-counts__item">';
-        echo e((string) ($item['label'] ?? '')) . ' (<span>' . (int) ($item['count'] ?? 0) . '</span>)';
-        echo '</span>';
+        $label = (string) ($item['label'] ?? '');
+        $count = (int) ($item['count'] ?? 0);
+        $jumps = $item['jumps'] ?? null;
+        if (!is_array($jumps)) {
+            echo '<span class="bucket-counts__item">';
+            echo e($label) . ' (<span>' . $count . '</span>)';
+            echo '</span>';
+            continue;
+        }
+        $align = !empty($item['alignEnd']) ? ' data-count-align="end"' : '';
+        echo '<div class="bucket-counts__menu" data-count-menu' . $align . '>';
+        echo '<button type="button" class="bucket-counts__item bucket-counts__item--link" data-count-menu-toggle aria-expanded="false" aria-haspopup="true" title="Show ' . e($label) . '">';
+        echo e($label) . ' (<span>' . $count . '</span>)';
+        echo '</button>';
+        echo '<div class="bucket-counts__panel" role="group" aria-label="' . e($label) . '">';
+        if ($jumps === []) {
+            echo '<p class="bucket-counts__empty">None</p>';
+        }
+        foreach ($jumps as $jump) {
+            $id = (string) ($jump['id'] ?? '');
+            $text = (string) ($jump['text'] ?? '');
+            $title = (string) ($jump['title'] ?? $text);
+            $checked = !empty($jump['checked']);
+            echo '<a class="bucket-counts__jump' . ($checked ? ' is-checked' : '') . '" href="#' . e(rawurlencode($id)) . '" data-count-jump="' . e($id) . '" title="' . e($title) . '">';
+            echo '<span class="bucket-counts__jump-check" aria-hidden="true">' . ($checked ? '✓' : '') . '</span>' . e($text);
+            echo '</a>';
+        }
+        echo '</div></div>';
     }
     echo '</div>';
 }
@@ -467,11 +528,12 @@ function render_doc_open_link(
     </main>
 <?php else:
     $counts = nav_review_counts($pack);
+    $jumps = nav_review_jumps($pack);
     render_count_bar([
-        ['label' => 'Guides', 'count' => $counts['guides']],
-        ['label' => 'Docs', 'count' => $counts['documents']],
-        ['label' => 'Keypoints', 'count' => $counts['keypoints']],
-        ['label' => 'MOC', 'count' => $counts['moc']],
+        ['label' => 'Guides', 'count' => $counts['guides'], 'jumps' => $jumps['guides']],
+        ['label' => 'Docs', 'count' => $counts['documents'], 'jumps' => $jumps['documents']],
+        ['label' => 'Keypoints', 'count' => $counts['keypoints'], 'jumps' => $jumps['keypoints']],
+        ['label' => 'MOC', 'count' => $counts['moc'], 'jumps' => $jumps['moc'], 'alignEnd' => true],
     ], 'Navigation artifact counts');
 
     if ($phase === 2): ?>
@@ -532,7 +594,7 @@ function render_doc_open_link(
                     }
                     $guideQuiz = build_quiz_prompt($folder, 'Reading guide (' . $id . ')', $guideNeed, $guideMaterial);
                     ?>
-                    <article class="item-card<?= $checked ? ' is-checked' : '' ?>" data-kind="guide" data-id="<?= e($id) ?>" data-checked="<?= $checked ? '1' : '0' ?>">
+                    <article class="item-card<?= $checked ? ' is-checked' : '' ?>" id="guide-<?= e($id) ?>" data-kind="guide" data-id="<?= e($id) ?>" data-checked="<?= $checked ? '1' : '0' ?>">
                         <div class="item-card__main">
                             <div class="item-card__title-row">
                                 <?php render_check_button($checked, $reviewLocked, $checked ? 'Unmark as reviewed' : 'Mark as reviewed'); ?>
@@ -619,7 +681,7 @@ function render_doc_open_link(
                                         }
                                         $kpQuiz = build_quiz_prompt($folder, 'Keypoint (' . $kid . ') in ' . $filename, $kpTitle, $kpMaterial);
                                         ?>
-                                        <div class="keypoint<?= $kChecked ? ' is-checked' : '' ?>" data-kind="keypoint" data-id="<?= e($kid) ?>" data-doc="<?= e($filename) ?>" data-checked="<?= $kChecked ? '1' : '0' ?>">
+                                        <div class="keypoint<?= $kChecked ? ' is-checked' : '' ?>" id="kp-<?= e($filename . '-' . $kid) ?>" data-kind="keypoint" data-id="<?= e($kid) ?>" data-doc="<?= e($filename) ?>" data-checked="<?= $kChecked ? '1' : '0' ?>">
                                             <div class="item-card__title-row">
                                                 <?php render_check_button($kChecked, $reviewLocked, $kChecked ? 'Unmark keypoint' : 'Mark keypoint reviewed'); ?>
                                                 <h5><?= e($kpTitle) ?></h5>
@@ -687,7 +749,7 @@ function render_doc_open_link(
                     }
                     $mocQuiz = build_quiz_prompt($folder, 'MOC node (' . $id . ')', $mocTitle, $mocMaterial);
                     ?>
-                    <article class="item-card<?= $checked ? ' is-checked' : '' ?>" data-kind="moc" data-id="<?= e($id) ?>" data-checked="<?= $checked ? '1' : '0' ?>">
+                    <article class="item-card<?= $checked ? ' is-checked' : '' ?>" id="moc-<?= e($id) ?>" data-kind="moc" data-id="<?= e($id) ?>" data-checked="<?= $checked ? '1' : '0' ?>">
                         <div class="item-card__main">
                             <div class="item-card__title-row">
                                 <?php render_check_button($checked, $reviewLocked, $checked ? 'Unmark MOC node' : 'Mark MOC node reviewed'); ?>
