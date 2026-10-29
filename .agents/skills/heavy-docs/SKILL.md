@@ -58,8 +58,16 @@ Skip when reading sources: `phase1.json`, `phase2.json`, `phase1-responses.md`, 
 | `.pdf` | `pdftotext -layout "{path}" -` when available; else Python (`pypdf` / `pdfminer.six` / `pymupdf`) if installed. |
 | `.docx` | `pandoc -t plain "{path}"`, or macOS `textutil -convert txt -stdout "{path}"`, or unzip and read `word/document.xml` (strip tags). |
 | `.doc` | macOS `textutil -convert txt -stdout "{path}"`, or `antiword` / `pandoc` if present. |
-| `.xlsx` / `.xls` | Python (`openpyxl` / `xlrd` / `pandas`) when available; else `ssconvert` (gnumeric); for `.xlsx`, unzip and read sheet XML + `sharedStrings.xml` as a last resort. Summarize sheet names, headers, and notable figures — do not dump huge grids wholesale into keypoints. |
+| `.xlsx` / `.xls` | Python (`openpyxl` / `xlrd` / `pandas`) when available; else `ssconvert` (gnumeric); for `.xlsx`, unzip and read sheet XML + `sharedStrings.xml` as a last resort. Summarize sheet names, headers, and notable figures — do not dump huge grids wholesale into keypoints. Then follow **Spreadsheets: guide the human reader** below. |
 | `.pptx` / `.ppt` | `pandoc -t plain` when available; else unzip `.pptx` and read `ppt/slides/slide*.xml`. |
+
+**Spreadsheets: guide the human reader.** A workbook is not read top to bottom, so tell the person exactly where to look:
+
+- `provides` lists every tab (sheet) by its exact name with one line on what it holds, and marks tabs that are safe to skip (raw data dumps, lookup tables, hidden helper sheets, chart-only tabs).
+- Start the keypoints with a **"Read these tabs, in this order"** keypoint: the tab names in reading order and why each matters for this pack.
+- For each tab worth reading, add a keypoint that says what to read as a human: which rows, columns, totals, or named cells carry the answer (e.g. "Row 12 *Net burn* across Jan–Dec; the FY total is in column N"), what assumptions drive the numbers, and what to sanity-check.
+- Cite tabs as `sources` in the form `{file}:{Tab name}` (e.g. `model.xlsx:Summary`). In the GUI that source opens the workbook preview on that tab.
+- Reading guides that include a workbook should name the tab(s) to open in `howToRead`, not just the file.
 
 If extraction fails after trying available tools: still list the file under `documents` with a low `coveragePercent`, set `coverageNote` to the failure reason, and ask the user for a text/CSV export or to install a local extractor — then continue with the files you could read.
 

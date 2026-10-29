@@ -57,6 +57,14 @@ Each folder under `inputs/` is a separate project. Use **Projects** in the app h
 
 Markdown and plain text work; so do **PDF, Word (`.doc`/`.docx`), Excel (`.xls`/`.xlsx`), CSV/TSV**, HTML, RTF, PowerPoint, and similar. Excerpts or full files are fine. The skill extracts readable text from each format when mapping the pack.
 
+### Excel spreadsheets: you're told which tabs to read
+
+A workbook isn't something you read top to bottom, so the skill guides you through it as a human reader:
+
+- **Which tabs to read, and in what order.** Each workbook's card lists every tab with what it holds, flags the tabs you can skip (raw data, lookups, helper sheets), and starts with a "Read these tabs, in this order" keypoint.
+- **What to read on each tab.** Keypoints point at the rows, columns, totals, or cells that carry the answer, the assumptions behind the numbers, and what to sanity-check.
+- **One click to the right tab.** A source like `model.xlsx:Summary` opens the workbook preview straight to the *Summary* tab, and reading guides name the tab to open, not just the file.
+
 ```
 app.config.json
 inputs/
