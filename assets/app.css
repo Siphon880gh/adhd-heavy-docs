@@ -2277,6 +2277,168 @@ body.is-showing-shortcuts .app-header__menu > svg {
   font-size: 1.15rem;
 }
 
+.nav-section__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.nav-section__collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.15rem 0.1rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-section__collapse h2 {
+  margin: 0;
+}
+
+.nav-section__collapse:hover h2 {
+  color: var(--accent);
+}
+
+.nav-section__chevron {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--ink-muted);
+  border-bottom: 2px solid var(--ink-muted);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-section.is-collapsed .nav-section__chevron {
+  transform: rotate(-45deg);
+}
+
+.nav-section.is-collapsed > :not(.nav-section__head),
+.nav-section.is-collapsed .nav-section__head > p {
+  display: none;
+}
+
+.nav-section__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  margin-left: auto;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.nav-section__copy:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.nav-section__copy.is-copied {
+  color: var(--added);
+  border-color: rgba(61, 214, 140, 0.55);
+  background: var(--added-bg);
+}
+
+.app-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 80;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(0.5rem);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.app-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-toast.is-saved {
+  border-color: rgba(61, 214, 140, 0.55);
+  background: var(--added-bg);
+  color: var(--added);
+}
+
+.item-card__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.item-card:hover .item-card__copy,
+.keypoint:hover .item-card__copy,
+.item-card__copy:focus-visible {
+  opacity: 1;
+}
+
+.item-card__copy:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.item-card__copy.is-copied {
+  opacity: 1;
+  color: var(--added);
+  border-color: rgba(61, 214, 140, 0.55);
+  background: var(--added-bg);
+}
+
+.item-card__body-text.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.item-card__read-more {
+  padding: 0;
+  margin: 0 0 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.item-card__read-more:hover {
+  text-decoration: underline;
+}
+
 .nav-section .card-list {
   display: flex;
   flex-direction: column;

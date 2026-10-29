@@ -572,7 +572,7 @@ function render_doc_open_link(
         </main>
     <?php else: ?>
 
-    <section class="nav-section">
+    <section class="nav-section" data-section-key="guides">
         <div class="nav-section__head">
             <h2>How to read — by need</h2>
             <p class="muted">Different paths through the same pack depending on what you are doing.</p>
@@ -620,7 +620,7 @@ function render_doc_open_link(
         <?php endif; ?>
     </section>
 
-    <section class="nav-section">
+    <section class="nav-section" data-section-key="documents">
         <div class="nav-section__head">
             <h2>Documents — what each provides</h2>
             <p class="muted">Coverage % is how much of that file this map actually covers — not a quality score.</p>
@@ -721,7 +721,7 @@ function render_doc_open_link(
         <?php endif; ?>
     </section>
 
-    <section class="nav-section">
+    <section class="nav-section" data-section-key="moc">
         <div class="nav-section__head">
             <h2>Map of content (MOC)</h2>
             <p class="muted">Cross-document hubs — optional when keypoints alone are enough.</p>

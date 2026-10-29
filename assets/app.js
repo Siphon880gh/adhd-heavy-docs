@@ -7,6 +7,229 @@
     return Array.prototype.slice.call((root || document).querySelectorAll(sel));
   }
 
+  // --- Toast ---
+  var appToastTimer = null;
+
+  function showAppToast(message, opts) {
+    var toast = qs("[data-app-toast]");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.className = "app-toast";
+      toast.setAttribute("data-app-toast", "");
+      toast.setAttribute("role", "status");
+      toast.setAttribute("aria-live", "polite");
+      document.body.appendChild(toast);
+    }
+    var isSaved = !!(opts && opts.saved);
+    toast.textContent = message;
+    toast.hidden = false;
+    toast.classList.toggle("is-saved", isSaved);
+    toast.classList.add("is-visible");
+    if (appToastTimer) clearTimeout(appToastTimer);
+    appToastTimer = setTimeout(function () {
+      toast.classList.remove("is-visible");
+      appToastTimer = setTimeout(function () {
+        toast.hidden = true;
+        toast.classList.remove("is-saved");
+      }, 220);
+    }, isSaved ? 1600 : 2800);
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
+  }
+
+  function legacyCopy(text) {
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      ta.remove();
+      if (ok) resolve();
+      else reject(new Error("Copy failed"));
+    });
+  }
+
+  // --- Collapsible sections + copy section ---
+  var SECTION_STORE = "heavyDocs.collapsedSections";
+
+  function readCollapsedSections() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(SECTION_STORE) || "{}");
+      return raw && typeof raw === "object" ? raw : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function setSectionCollapsed(section, collapsed, remember) {
+    section.classList.toggle("is-collapsed", collapsed);
+    var toggle = qs("[data-collapse-toggle]", section);
+    if (toggle) toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if (!remember) return;
+    var key = section.getAttribute("data-section-key") || "";
+    if (!key) return;
+    var store = readCollapsedSections();
+    if (collapsed) store[key] = true;
+    else delete store[key];
+    try {
+      localStorage.setItem(SECTION_STORE, JSON.stringify(store));
+    } catch (err) {
+      // storage unavailable
+    }
+  }
+
+  function cardCopyText(card) {
+    var clone = card.cloneNode(true);
+    qsa("button, textarea, [data-response-panel], .item-card__check, .pill", clone).forEach(function (el) {
+      el.remove();
+    });
+    var holder = document.createElement("div");
+    holder.style.position = "fixed";
+    holder.style.left = "-9999px";
+    holder.style.width = "40rem";
+    holder.appendChild(clone);
+    document.body.appendChild(holder);
+    var text = (clone.innerText || clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+    holder.remove();
+    return text;
+  }
+
+  (function initSections() {
+    var collapsed = readCollapsedSections();
+    qsa("[data-section-key]").forEach(function (section) {
+      var head = qs(".nav-section__head", section);
+      var h2 = head ? qs("h2", head) : null;
+      if (!h2) return;
+      var title = h2.textContent || "";
+      var bar = document.createElement("div");
+      bar.className = "nav-section__bar";
+      var toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "nav-section__collapse";
+      toggle.setAttribute("data-collapse-toggle", "");
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.title = "Collapse or expand this section";
+      var chevron = document.createElement("span");
+      chevron.className = "nav-section__chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      h2.parentNode.insertBefore(bar, h2);
+      toggle.appendChild(chevron);
+      toggle.appendChild(h2);
+      bar.appendChild(toggle);
+      if (qs(".item-card", section)) {
+        var copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "nav-section__copy";
+        copy.setAttribute("data-copy-section", "");
+        copy.title = "Copy every card in this section";
+        copy.setAttribute("aria-label", "Copy every card in " + title);
+        copy.innerHTML =
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+        bar.appendChild(copy);
+      }
+      if (collapsed[section.getAttribute("data-section-key")]) setSectionCollapsed(section, true, false);
+    });
+
+    qsa("[data-section-key] .card-list > .item-card, [data-section-key] .keypoint").forEach(function (card) {
+      var row = qs(".item-card__title-row", card);
+      if (!row) return;
+      var heading = qs("h3, h5", row);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "item-card__copy";
+      btn.setAttribute("data-copy-item", "");
+      btn.title = "Copy this card";
+      btn.setAttribute("aria-label", "Copy " + (heading ? heading.textContent.trim() : "card"));
+      btn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      if (heading && heading.nextSibling) row.insertBefore(btn, heading.nextSibling);
+      else row.appendChild(btn);
+    });
+
+    qsa(".item-card__body-text").forEach(function (el) {
+      var lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22;
+      if (el.scrollHeight <= lineHeight * 6.5) return;
+      el.classList.add("is-clamped");
+      var more = document.createElement("button");
+      more.type = "button";
+      more.className = "item-card__read-more";
+      more.setAttribute("data-read-more", "");
+      more.setAttribute("aria-expanded", "false");
+      more.textContent = "Read more";
+      el.parentNode.insertBefore(more, el.nextSibling);
+    });
+
+    document.addEventListener("click", function (e) {
+      var toggle = e.target.closest("[data-collapse-toggle]");
+      if (toggle) {
+        var section = toggle.closest("[data-section-key]");
+        if (section) setSectionCollapsed(section, !section.classList.contains("is-collapsed"), true);
+        return;
+      }
+      var readMore = e.target.closest("[data-read-more]");
+      if (readMore) {
+        var textEl = readMore.previousElementSibling;
+        if (!textEl) return;
+        var expand = textEl.classList.contains("is-clamped");
+        textEl.classList.toggle("is-clamped", !expand);
+        readMore.setAttribute("aria-expanded", expand ? "true" : "false");
+        readMore.textContent = expand ? "Show less" : "Read more";
+        return;
+      }
+      var itemCopy = e.target.closest("[data-copy-item]");
+      if (itemCopy) {
+        var itemCard = itemCopy.closest(".keypoint") || itemCopy.closest(".item-card");
+        if (!itemCard) return;
+        var itemText = cardCopyText(itemCard);
+        if (!itemText) return;
+        copyText(itemText).then(function () {
+          itemCopy.classList.add("is-copied");
+          setTimeout(function () {
+            itemCopy.classList.remove("is-copied");
+          }, 1400);
+          showAppToast("Copied", { saved: true });
+        }).catch(function () {
+          showAppToast("Could not copy to the clipboard");
+        });
+        return;
+      }
+      var copyBtn = e.target.closest("[data-copy-section]");
+      if (copyBtn) {
+        var copySection = copyBtn.closest("[data-section-key]");
+        if (!copySection) return;
+        var h2 = qs("h2", copySection);
+        var parts = qsa(".card-list > .item-card", copySection).map(cardCopyText).filter(Boolean);
+        if (!parts.length) return;
+        var text = "# " + (h2 ? h2.textContent.trim() : "") + "\n\n" + parts.join("\n\n---\n\n");
+        copyText(text).then(function () {
+          copyBtn.classList.add("is-copied");
+          setTimeout(function () {
+            copyBtn.classList.remove("is-copied");
+          }, 1400);
+          showAppToast("Copied " + parts.length + (parts.length === 1 ? " card" : " cards"), { saved: true });
+        }).catch(function () {
+          showAppToast("Could not copy to the clipboard");
+        });
+      }
+    });
+  })();
+
   // --- Count bar jump menus ---
   (function initCountMenus() {
     var bar = qs("[data-bucket-counts]");
@@ -48,6 +271,8 @@
     function scrollToJumpTarget(id) {
       var target = document.getElementById(id);
       if (!target) return false;
+      var collapsedSection = target.closest("[data-section-key].is-collapsed");
+      if (collapsedSection) setSectionCollapsed(collapsedSection, false, true);
       var details = target.closest("details:not([open])");
       if (details) details.open = true;
       var header = qs(".app-header");
@@ -143,7 +368,7 @@
           })
           .catch(function (err) {
             button.disabled = false;
-            window.alert(err && err.message ? err.message : "Could not switch project");
+            showAppToast(err && err.message ? err.message : "Could not switch project");
           });
         return;
       }
@@ -464,6 +689,9 @@
           } else {
             target.innerHTML = html;
           }
+          if (activeName === name && session.anchor) {
+            applyAnchorJump(session.anchor);
+          }
         })
         .catch(function (err) {
           session.sheetLoading = false;
@@ -584,11 +812,33 @@
       return true;
     }
 
+    function applySheetTabJump(needle) {
+      var preview = bodyEl ? qs("[data-sheet-preview]", bodyEl) : null;
+      if (!preview) return false;
+      var tabs = qsa("[data-sheet-tab]", preview);
+      var match = null;
+      tabs.forEach(function (tab) {
+        var label = (tab.textContent || "").trim().toLowerCase();
+        if (!match && label === needle) match = tab;
+      });
+      if (!match) {
+        tabs.forEach(function (tab) {
+          var label = (tab.textContent || "").trim().toLowerCase();
+          if (!match && label && (label.indexOf(needle) !== -1 || needle.indexOf(label) !== -1)) match = tab;
+        });
+      }
+      if (!match) return false;
+      match.click();
+      match.scrollIntoView({ block: "nearest", inline: "center" });
+      return true;
+    }
+
     function applyAnchorJump(anchor) {
       if (!anchor || !bodyEl) return false;
       clearLineHighlights();
       var needle = String(anchor).trim().toLowerCase();
       if (!needle) return false;
+      if (applySheetTabJump(needle)) return true;
       var lines = qsa(".source-line", bodyEl);
       var match = null;
       for (var i = 0; i < lines.length; i++) {
